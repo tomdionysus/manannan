@@ -1,5 +1,6 @@
 #include "manannan/plugin_loader.h"
 #include <dlfcn.h>
+#include <set>
 #include <stdexcept>
 #include "manannan/config.h"
 #include "manannan/loggers/logger_scoped.h"
@@ -27,12 +28,17 @@ Plugin& LoadedPlugin::instance() const { return *instance_private; }
 
 PluginLoader::PluginLoader(std::shared_ptr<loggers::Logger> logger) : logger_private(std::move(logger)) {}
 void PluginLoader::scan(const std::vector<std::filesystem::path>& directories) {
+  std::set<std::filesystem::path> scanned;
   for (const auto& directory : directories) {
     logger_private->debug("scanning plugin directory " + directory.string());
     std::error_code error;
     if (!std::filesystem::is_directory(directory, error)) { logger_private->warn("plugin directory unavailable: " + directory.string()); continue; }
-    for (const auto& entry : std::filesystem::directory_iterator(directory)) {
-      if (!entry.is_regular_file() || entry.path().extension() != ".so") continue;
+    const auto canonical = std::filesystem::weakly_canonical(directory, error);
+    if (!scanned.insert(error ? directory : canonical).second) { logger_private->debug("already scanned " + directory.string()); continue; }
+    std::filesystem::directory_iterator entries(directory, error);
+    if (error) { logger_private->warn("cannot read plugin directory " + directory.string() + ": " + error.message()); continue; }
+    for (const auto& entry : entries) {
+      if (!entry.is_regular_file(error) || entry.path().extension() != ".so") continue;
       void* library = dlopen(entry.path().c_str(), RTLD_NOW | RTLD_LOCAL);
       if (!library) { logger_private->warn("cannot inspect " + entry.path().string() + ": " + dlerror()); continue; }
       dlerror();
@@ -44,7 +50,7 @@ void PluginLoader::scan(const std::vector<std::filesystem::path>& directories) {
           !descriptor->create || !descriptor->destroy) { logger_private->warn("invalid plugin: " + entry.path().string()); dlclose(library); continue; }
       const auto key = std::make_pair(descriptor->type, std::string(descriptor->name));
       if (discovered_private.contains(key)) { dlclose(library); throw std::runtime_error("duplicate plugin: " + std::string(descriptor->name)); }
-      discovered_private.emplace(key, Discovered{entry.path(), *descriptor});
+      discovered_private.emplace(key, entry.path());
       logger_private->debug("discovered plugin " + std::string(descriptor->name));
       dlclose(library);
     }
@@ -53,18 +59,28 @@ void PluginLoader::scan(const std::vector<std::filesystem::path>& directories) {
 LoadedPlugin PluginLoader::create(PluginType type, const std::string& name, const YAML::Node& document) const {
   const auto found = discovered_private.find({type, name});
   if (found == discovered_private.end()) throw std::runtime_error("plugin not found: " + name);
-  logger_private->debug("loading plugin " + name + " from " + found->second.path.string());
-  void* library = dlopen(found->second.path.c_str(), RTLD_NOW | RTLD_LOCAL);
+  logger_private->debug("loading plugin " + name + " from " + found->second.string());
+  void* library = dlopen(found->second.c_str(), RTLD_NOW | RTLD_LOCAL);
   if (!library) throw std::runtime_error("cannot load plugin " + name + ": " + dlerror());
   auto get_descriptor = reinterpret_cast<GetPluginDescriptor>(dlsym(library, MANANNAN_PLUGIN_ENTRYPOINT));
   const auto* descriptor = get_descriptor ? get_descriptor() : nullptr;
-  if (!descriptor || descriptor->abi_version != plugin_abi_version) { dlclose(library); throw std::runtime_error("plugin ABI changed while loading: " + name); }
+  if (!descriptor || descriptor->abi_version != plugin_abi_version || descriptor->type != type ||
+      !descriptor->name || name != descriptor->name || !descriptor->yaml_root || !descriptor->create ||
+      !descriptor->destroy) {
+    dlclose(library);
+    throw std::runtime_error("plugin changed while loading: " + name);
+  }
   auto node = resolve_yaml_root(document, descriptor->yaml_root);
-  if (!node) { dlclose(library); throw std::runtime_error("plugin YAML root missing: " + std::string(descriptor->yaml_root)); }
+  if (!node) { const std::string root = descriptor->yaml_root; dlclose(library); throw std::runtime_error("plugin YAML root missing: " + root); }
   auto scoped_logger = std::make_shared<loggers::LoggerScoped>(name, logger_private);
   Plugin* instance = nullptr;
-  try { instance = descriptor->create(node, scoped_logger); } catch (...) { dlclose(library); throw; }
-  if (!instance) { dlclose(library); throw std::runtime_error("plugin creation failed: " + name); }
+  // An exception thrown by the plugin may have its type information and
+  // destructor inside the plugin, so it must be finished with before dlclose.
+  std::string failure = "factory returned no object";
+  try { instance = descriptor->create(node, scoped_logger); }
+  catch (const std::exception& error) { failure = error.what(); }
+  catch (...) { failure = "unknown exception"; }
+  if (!instance) { dlclose(library); throw std::runtime_error("cannot create plugin " + name + ": " + failure); }
   logger_private->info("loaded plugin " + name);
   return LoadedPlugin(library, descriptor, instance);
 }

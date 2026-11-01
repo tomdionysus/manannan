@@ -1,0 +1,28 @@
+manannan:
+  cadence: 5m
+  log_level: info
+  source: amazon_check_ip
+  registries:
+    - aws_route53
+  plugin_directories:
+    - @MANANNAN_PLUGIN_DIR@
+
+source:
+  amazon_check_ip:
+    timeout_seconds: 10
+
+registry:
+  aws_route53:
+    ttl: 60
+    timeout_seconds: 10
+    # AWS keys are read from AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in
+    # @CMAKE_INSTALL_FULL_SYSCONFDIR@/manannan/environment.
+    records:
+      - name: home.example.com
+        hosted_zone_id: Z0123456789EXAMPLE
+      # A record in another AWS account can use its own keys:
+      # - name: office.example.org
+      #   hosted_zone_id: Z9876543210EXAMPLE
+      #   credentials:
+      #     access_key_id: ${OFFICE_AWS_ACCESS_KEY_ID}
+      #     secret_access_key: ${OFFICE_AWS_SECRET_ACCESS_KEY}

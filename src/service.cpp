@@ -18,20 +18,32 @@ timespec to_timespec(std::chrono::steady_clock::duration duration) {
   return {seconds.count(), (nanoseconds - seconds).count()};
 }
 }
-Service::Service(SourcePlugin& source, RegistryPlugin& registry, std::chrono::milliseconds cadence,
+Service::Service(SourcePlugin& source, std::vector<Registry> registries, std::chrono::milliseconds cadence,
                  std::shared_ptr<loggers::Logger> logger)
-    : source_private(source), registry_private(registry), cadence_private(cadence), logger_private(std::move(logger)) {}
-void Service::reconcile() {
-  logger_private->debug("checking public IP");
-  logger_private->debug("loading IP from source");
+    : source_private(source), registries_private(std::move(registries)), cadence_private(cadence),
+      logger_private(std::move(logger)) {}
+std::size_t Service::reconcile() {
+  logger_private->debug("loading value from source");
   const auto desired = source_private.get_value();
-  logger_private->debug("checking registered IP");
-  logger_private->debug("loading IP from registry");
-  const auto registered = registry_private.get_value();
-  if (desired == registered) { logger_private->debug("registered value is current: " + desired); return; }
-  logger_private->debug("registered value differs; setting " + desired + " in registry");
-  registry_private.set_value(desired);
-  logger_private->info("set new IP to " + desired);
+  if (desired.empty()) throw std::runtime_error("source returned an empty value");
+  logger_private->debug("source value is " + desired);
+  std::size_t failures = 0;
+  for (const auto& registry : registries_private) {
+    for (const auto& record : registry.plugin->records()) {
+      const auto label = registry.name + ":" + record;
+      try {
+        const auto registered = registry.plugin->get_value(record);
+        if (registered == desired) { logger_private->debug(label + " is current: " + desired); continue; }
+        logger_private->debug(label + " is '" + registered + "'; setting " + desired);
+        registry.plugin->set_value(record, desired);
+        logger_private->info("set " + label + " to " + desired);
+      } catch (const std::exception& error) {
+        ++failures;
+        logger_private->error(label + ": " + error.what());
+      }
+    }
+  }
+  return failures;
 }
 int Service::run() {
   shutdown_requested = 0;
@@ -51,13 +63,16 @@ int Service::run() {
     throw std::system_error(errno, std::generic_category());
   }
 
-  try { reconcile(); } catch (const std::exception& error) { logger_private->error(error.what()); }
+  const auto attempt = [this] {
+    try { reconcile(); } catch (const std::exception& error) { logger_private->error(error.what()); }
+  };
+  attempt();
 
   auto next_run = std::chrono::steady_clock::now() + cadence_private;
   while (!shutdown_requested) {
     const auto now = std::chrono::steady_clock::now();
     if (now >= next_run) {
-      try { reconcile(); } catch (const std::exception& error) { logger_private->error(error.what()); }
+      attempt();
       next_run = std::chrono::steady_clock::now() + cadence_private;
       continue;
     }

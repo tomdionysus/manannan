@@ -1,6 +1,6 @@
 #include "manannan/duration.h"
 #include <cctype>
-#include <limits>
+#include <cstdint>
 #include <stdexcept>
 namespace manannan {
 std::chrono::milliseconds parse_duration(const std::string& value) {
@@ -16,9 +16,13 @@ std::chrono::milliseconds parse_duration(const std::string& value) {
   else if (unit == "m") multiplier = 60'000;
   else if (unit == "h") multiplier = 3'600'000;
   else throw std::invalid_argument("unsupported duration unit: " + unit);
-  if (number == 0 || number > std::numeric_limits<std::uint64_t>::max() / multiplier)
-    throw std::invalid_argument("duration is zero or too large");
-  return std::chrono::milliseconds(number * multiplier);
+  // The service adds the cadence to a steady_clock time point, so the limit is
+  // what that clock can represent, with headroom for the current time.
+  constexpr auto limit = static_cast<std::uint64_t>(
+      std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::duration::max()).count() / 2);
+  if (number == 0 || number > limit / multiplier)
+    throw std::invalid_argument("duration is zero or too large: " + value);
+  return std::chrono::milliseconds(static_cast<std::chrono::milliseconds::rep>(number * multiplier));
 }
 }
 
