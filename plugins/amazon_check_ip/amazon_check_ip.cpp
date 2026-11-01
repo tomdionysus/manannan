@@ -20,9 +20,12 @@ class AmazonCheckIp final : public manannan::SourcePlugin {
         timeout_private(config["timeout_seconds"].as<long>(10)), logger_private(std::move(logger)) {
     if (timeout_private <= 0) throw std::runtime_error("timeout_seconds must be positive");
     logger_private->debug("initialising Amazon Check IP source");
-    curl_global_init(CURL_GLOBAL_DEFAULT);
+    if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) throw std::runtime_error("cannot initialise libcurl");
   }
-  ~AmazonCheckIp() override { logger_private->debug("destroy()"); }
+  ~AmazonCheckIp() override {
+    logger_private->debug("destroy()");
+    curl_global_cleanup();
+  }
   std::string get_value() override {
     logger_private->debug("get_value()");
     logger_private->debug("requesting public IP from " + endpoint_private);
@@ -33,7 +36,7 @@ class AmazonCheckIp final : public manannan::SourcePlugin {
     curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, append_data);
     curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &response);
     curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT, timeout_private);
-    curl_easy_setopt(curl.get(), CURLOPT_USERAGENT, "Manannan/0.1");
+    curl_easy_setopt(curl.get(), CURLOPT_USERAGENT, "Manannan/0.2");
     const auto result = curl_easy_perform(curl.get());
     long status = 0; curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &status);
     if (result != CURLE_OK) throw std::runtime_error(std::string("check IP request failed: ") + curl_easy_strerror(result));

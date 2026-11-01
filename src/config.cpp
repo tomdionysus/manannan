@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <sstream>
 #include <stdexcept>
+#include <utility>
 #include "manannan/duration.h"
 namespace manannan {
 loggers::LogLevel parse_log_level(std::string value) {
@@ -17,12 +18,18 @@ loggers::LogLevel parse_log_level(std::string value) {
 }
 
 YAML::Node resolve_yaml_root(const YAML::Node& document, const std::string& route) {
+  // A default-constructed YAML::Node is a defined null node, so "not found"
+  // must be an explicitly undefined node for callers' !node checks to work.
+  const YAML::Node missing(YAML::NodeType::Undefined);
   YAML::Node node = document;
   std::istringstream parts(route);
   std::string part;
   while (std::getline(parts, part, '.')) {
-    if (part.empty() || !node || !node.IsMap()) return {};
-    node.reset(node[part]);
+    if (part.empty() || !node || !node.IsMap()) return missing;
+    // Index through a const reference so a missing key cannot be added to the document.
+    const YAML::Node next = std::as_const(node)[part];
+    if (!next) return missing;
+    node.reset(next);
   }
   return node;
 }
@@ -35,10 +42,22 @@ Config load_config(const std::filesystem::path& path) {
   for (const auto& directory : service["plugin_directories"])
     config.plugin_directories.emplace_back(directory.as<std::string>());
   if (config.plugin_directories.empty()) throw std::runtime_error("no plugin directories configured");
-  config.source_plugin = service["source"].as<std::string>();
-  config.registry_plugin = service["registry"].as<std::string>();
+  const auto source = service["source"];
+  if (!source || !source.IsScalar()) throw std::runtime_error("manannan.source must name a source plugin");
+  config.source_plugin = source.as<std::string>();
+  if (service["registry"])
+    throw std::runtime_error("manannan.registry is not a setting; list registry plugins under manannan.registries");
+  const auto registries = service["registries"];
+  if (!registries || !registries.IsSequence() || registries.size() == 0)
+    throw std::runtime_error("manannan.registries must list at least one registry plugin");
+  for (const auto& registry : registries) {
+    const auto name = registry.as<std::string>();
+    if (std::find(config.registry_plugins.begin(), config.registry_plugins.end(), name) != config.registry_plugins.end())
+      throw std::runtime_error("registry listed twice: " + name);
+    config.registry_plugins.push_back(name);
+  }
   config.log_level = parse_log_level(service["log_level"].as<std::string>("info"));
-  if (const auto* environment_level = std::getenv("LOG_LEVEL"))
+  if (const auto* environment_level = std::getenv("LOG_LEVEL"); environment_level && *environment_level)
     config.log_level = parse_log_level(environment_level);
   return config;
 }

@@ -2,5 +2,5 @@ find_package(CURL REQUIRED)
 add_library(manannan_source_amazon_check_ip MODULE amazon_check_ip.cpp)
 target_link_libraries(manannan_source_amazon_check_ip PRIVATE manannan_api CURL::libcurl)
 set_target_properties(manannan_source_amazon_check_ip PROPERTIES PREFIX "" OUTPUT_NAME "manannan_source_amazon_check_ip")
-install(TARGETS manannan_source_amazon_check_ip LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/manannan/plugins)
+install(TARGETS manannan_source_amazon_check_ip LIBRARY DESTINATION ${MANANNAN_PLUGIN_INSTALL_DIR})
 

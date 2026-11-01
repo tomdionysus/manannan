@@ -1,5 +1,8 @@
 #include <curl/curl.h>
+#include <algorithm>
+#include <cctype>
 #include <cstdlib>
+#include <initializer_list>
 #include <memory>
 #include <regex>
 #include <stdexcept>
@@ -19,16 +22,75 @@ std::size_t append_data(char* data, std::size_t size, std::size_t count, void* t
   return size * count;
 }
 
-std::string environment(const char* name) {
-  const auto* value = std::getenv(name);
+std::string environment(const std::string& name) {
+  const auto* value = std::getenv(name.c_str());
   return value ? value : "";
 }
 
-std::string configured_secret(const YAML::Node& node, const char* key, const char* fallback) {
-  auto value = node[key].as<std::string>("");
+std::string lowercase(std::string value) {
+  std::transform(value.begin(), value.end(), value.begin(),
+                 [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
+  return value;
+}
+
+// Rejects keys that are not recognised, so a misspelt setting fails loudly
+// instead of being silently replaced by a default.
+void check_keys(const YAML::Node& node, const std::string& where, std::initializer_list<const char*> allowed) {
+  for (const auto& entry : node) {
+    const auto key = entry.first.as<std::string>();
+    if (std::none_of(allowed.begin(), allowed.end(), [&](const char* name) { return key == name; }))
+      throw std::runtime_error(where + ": unknown setting '" + key + "'");
+  }
+}
+
+std::string scalar(const YAML::Node& node, const char* key, const std::string& where, bool required) {
+  const auto value = node[key];
+  if (!value) {
+    if (required) throw std::runtime_error(where + ": '" + key + "' is required");
+    return {};
+  }
+  if (!value.IsScalar()) throw std::runtime_error(where + ": '" + key + "' must be a single value");
+  return value.as<std::string>();
+}
+
+// A value of the form ${NAME} is read from the environment variable NAME.
+std::string expand(const std::string& value) {
   if (value.size() > 3 && value.starts_with("${") && value.ends_with("}"))
-    value = environment(value.substr(2, value.size() - 3).c_str());
-  return value.empty() ? environment(fallback) : value;
+    return environment(value.substr(2, value.size() - 3));
+  return value;
+}
+
+// Reads a credentials block. The plugin-wide block falls back to the standard
+// AWS_* environment variables for anything it leaves empty; a per-record block
+// is complete in itself, since mixing keys from two identities is never right.
+Credentials read_credentials(const YAML::Node& node, const std::string& where, bool environment_fallback) {
+  Credentials credentials;
+  if (node) {
+    if (!node.IsMap()) throw std::runtime_error(where + ": 'credentials' must be a mapping");
+    check_keys(node, where + " credentials", {"access_key_id", "secret_access_key", "session_token"});
+    credentials.access_key_id = expand(scalar(node, "access_key_id", where, false));
+    credentials.secret_access_key = expand(scalar(node, "secret_access_key", where, false));
+    credentials.session_token = expand(scalar(node, "session_token", where, false));
+  }
+  if (environment_fallback) {
+    if (credentials.access_key_id.empty()) credentials.access_key_id = environment("AWS_ACCESS_KEY_ID");
+    if (credentials.secret_access_key.empty()) credentials.secret_access_key = environment("AWS_SECRET_ACCESS_KEY");
+    if (credentials.session_token.empty()) credentials.session_token = environment("AWS_SESSION_TOKEN");
+  }
+  return credentials;
+}
+
+bool complete(const Credentials& credentials) {
+  return !credentials.access_key_id.empty() && !credentials.secret_access_key.empty();
+}
+
+unsigned read_ttl(const YAML::Node& node, unsigned fallback, const std::string& where) {
+  const auto value = node["ttl"];
+  if (!value) return fallback;
+  unsigned ttl = 0;
+  try { ttl = value.as<unsigned>(); } catch (const YAML::Exception&) { ttl = 0; }
+  if (ttl == 0 || ttl > 2'147'483'647) throw std::runtime_error(where + ": 'ttl' must be a positive number of seconds");
+  return ttl;
 }
 
 std::string xml_escape(const std::string& value) {
@@ -48,7 +110,7 @@ std::string xml_escape(const std::string& value) {
 
 std::string xml_unescape(std::string value) {
   const std::vector<std::pair<std::string, std::string>> replacements{
-      {"&amp;", "&"}, {"&lt;", "<"}, {"&gt;", ">"}, {"&quot;", "\""}, {"&apos;", "'"}};
+      {"&lt;", "<"}, {"&gt;", ">"}, {"&quot;", "\""}, {"&apos;", "'"}, {"&amp;", "&"}};
   for (const auto& [encoded, plain] : replacements) {
     std::size_t position = 0;
     while ((position = value.find(encoded, position)) != std::string::npos) {
@@ -59,82 +121,160 @@ std::string xml_unescape(std::string value) {
   return value;
 }
 
+// Route 53 returns names in lower case with characters outside [a-z0-9-_.] as
+// three-digit octal escapes, for example "*" as "\052".
+std::string decode_dns_name(const std::string& value) {
+  std::string result;
+  for (std::size_t i = 0; i < value.size(); ++i) {
+    if (value[i] == '\\' && i + 3 < value.size() &&
+        std::isdigit(static_cast<unsigned char>(value[i + 1])) &&
+        std::isdigit(static_cast<unsigned char>(value[i + 2])) &&
+        std::isdigit(static_cast<unsigned char>(value[i + 3]))) {
+      result += static_cast<char>(std::stoi(value.substr(i + 1, 3), nullptr, 8));
+      i += 3;
+    } else {
+      result += value[i];
+    }
+  }
+  return lowercase(result);
+}
+
+struct Record {
+  std::string name;  // as reported to the service: lower case, no trailing dot
+  std::string fqdn;  // as sent to Route 53: lower case, with trailing dot
+  std::string zone;
+  unsigned ttl;
+  Credentials credentials;
+};
+
 class AwsRoute53 final : public manannan::RegistryPlugin {
  public:
   AwsRoute53(const YAML::Node& config, std::shared_ptr<manannan::loggers::Logger> logger)
-      : zone_private(config["hosted_zone_id"].as<std::string>()),
-        name_private(config["record_name"].as<std::string>()),
-        ttl_private(config["ttl"].as<unsigned>(60)),
-        host_private(config["endpoint"].as<std::string>("route53.amazonaws.com")),
-        region_private(config["signing_region"].as<std::string>("us-east-1")),
-        timeout_private(config["timeout_seconds"].as<long>(10)),
-        logger_private(std::move(logger)) {
-    if (name_private.empty() || zone_private.empty() || ttl_private == 0 || timeout_private <= 0)
-      throw std::runtime_error("invalid Route 53 configuration");
-    if (zone_private.starts_with("/hostedzone/")) zone_private.erase(0, 12);
-    if (!name_private.ends_with('.')) name_private += '.';
-    const auto credential_node = config["credentials"];
-    credentials_private.access_key_id = configured_secret(credential_node, "access_key_id", "AWS_ACCESS_KEY_ID");
-    credentials_private.secret_access_key = configured_secret(credential_node, "secret_access_key", "AWS_SECRET_ACCESS_KEY");
-    credentials_private.session_token = configured_secret(credential_node, "session_token", "AWS_SESSION_TOKEN");
-    if (credentials_private.access_key_id.empty() || credentials_private.secret_access_key.empty())
-      throw std::runtime_error("AWS access key ID and secret access key are required");
-    logger_private->debug("initialising Route 53 registry");
-    curl_global_init(CURL_GLOBAL_DEFAULT);
+      : logger_private(std::move(logger)) {
+    const std::string where = "registry.aws_route53";
+    if (!config.IsMap()) throw std::runtime_error(where + " must be a mapping");
+    if (config["hosted_zone_id"] || config["record_name"])
+      throw std::runtime_error(where + ": set hosted_zone_id and name on each entry in 'records'");
+    check_keys(config, where, {"endpoint", "signing_region", "timeout_seconds", "ttl", "credentials", "records"});
+
+    host_private = config["endpoint"].as<std::string>("route53.amazonaws.com");
+    region_private = config["signing_region"].as<std::string>("us-east-1");
+    timeout_private = config["timeout_seconds"].as<long>(10);
+    if (host_private.empty() || region_private.empty() || timeout_private <= 0)
+      throw std::runtime_error(where + ": endpoint, signing_region and timeout_seconds must be set");
+    const auto default_ttl = read_ttl(config, 60, where);
+    const auto base_credentials = read_credentials(config["credentials"], where, true);
+
+    const auto records = config["records"];
+    if (!records || !records.IsSequence() || records.size() == 0)
+      throw std::runtime_error(where + ": 'records' must list at least one record");
+    for (std::size_t index = 0; index < records.size(); ++index) {
+      const auto entry = records[index];
+      const auto entry_where = where + ".records[" + std::to_string(index) + "]";
+      if (!entry.IsMap()) throw std::runtime_error(entry_where + " must be a mapping");
+      check_keys(entry, entry_where, {"name", "hosted_zone_id", "ttl", "credentials"});
+
+      Record record;
+      record.name = lowercase(scalar(entry, "name", entry_where, true));
+      while (record.name.ends_with('.')) record.name.pop_back();
+      if (record.name.empty()) throw std::runtime_error(entry_where + ": 'name' is empty");
+      record.fqdn = record.name + ".";
+      record.zone = scalar(entry, "hosted_zone_id", entry_where, true);
+      if (record.zone.starts_with("/hostedzone/")) record.zone.erase(0, 12);
+      if (record.zone.empty()) throw std::runtime_error(entry_where + ": 'hosted_zone_id' is empty");
+      record.ttl = read_ttl(entry, default_ttl, entry_where);
+      if (entry["credentials"]) {
+        record.credentials = read_credentials(entry["credentials"], entry_where, false);
+        if (!complete(record.credentials))
+          throw std::runtime_error(entry_where + ": credentials need access_key_id and secret_access_key");
+      } else {
+        if (!complete(base_credentials))
+          throw std::runtime_error(entry_where + " (" + record.name + ") has no credentials: set " + where +
+                                   ".credentials, AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or per-record credentials");
+        record.credentials = base_credentials;
+      }
+      if (find(record.name)) throw std::runtime_error(where + ": record " + record.name + " is listed twice");
+      logger_private->debug("record " + record.name + " in zone " + record.zone + " with TTL " +
+                            std::to_string(record.ttl) +
+                            (entry["credentials"] ? " using its own credentials" : " using the base credentials"));
+      records_private.push_back(std::move(record));
+    }
+    if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) throw std::runtime_error("cannot initialise libcurl");
   }
 
-  ~AwsRoute53() override { logger_private->debug("destroy()"); }
+  ~AwsRoute53() override {
+    logger_private->debug("destroy()");
+    curl_global_cleanup();
+  }
 
-  std::string get_value() override {
-    logger_private->debug("get_value()");
-    logger_private->debug("reading A record " + name_private);
-    const auto query = "maxitems=1&name=" + manannan::aws::url_encode(name_private) + "&type=A";
-    const auto response = request("GET", read_path(), query, "");
+  std::vector<std::string> records() const override {
+    std::vector<std::string> names;
+    for (const auto& record : records_private) names.push_back(record.name);
+    return names;
+  }
+
+  std::string get_value(const std::string& name) override {
+    const auto& record = lookup(name);
+    logger_private->debug("reading A record " + record.fqdn + " in zone " + record.zone);
+    const auto query = "maxitems=1&name=" + manannan::aws::url_encode(record.fqdn) + "&type=A";
+    const auto response = request(record, "GET", rrset_path(record), query, "");
     const std::regex set_pattern("<ResourceRecordSet>([\\s\\S]*?)</ResourceRecordSet>");
+    const std::regex name_pattern("<Name>([^<]+)</Name>");
+    const std::regex value_pattern("<ResourceRecord>\\s*<Value>([^<]+)</Value>");
     for (auto current = std::sregex_iterator(response.begin(), response.end(), set_pattern);
          current != std::sregex_iterator(); ++current) {
       const auto set = (*current)[1].str();
       std::smatch name_match;
       std::smatch value_match;
-      if (std::regex_search(set, name_match, std::regex("<Name>([^<]+)</Name>")) &&
-          xml_unescape(name_match[1].str()) == name_private &&
+      if (std::regex_search(set, name_match, name_pattern) &&
+          decode_dns_name(xml_unescape(name_match[1].str())) == record.fqdn &&
           set.find("<Type>A</Type>") != std::string::npos &&
-          std::regex_search(set, value_match, std::regex("<ResourceRecord>\\s*<Value>([^<]+)</Value>")))
-        {
-          const auto value = xml_unescape(value_match[1].str());
-          logger_private->debug("registered address is " + value);
-          return value;
-        }
+          std::regex_search(set, value_match, value_pattern)) {
+        const auto value = xml_unescape(value_match[1].str());
+        logger_private->debug(record.name + " is registered as " + value);
+        return value;
+      }
     }
-    logger_private->debug("A record is not currently set");
+    logger_private->debug(record.name + " has no A record");
     return {};
   }
 
-  void set_value(const std::string& value) override {
-    logger_private->debug("set_value(" + value + ")");
-    logger_private->debug("setting A record " + name_private + " to " + value);
+  void set_value(const std::string& name, const std::string& value) override {
+    const auto& record = lookup(name);
+    logger_private->debug("setting A record " + record.fqdn + " to " + value);
     const auto payload = std::string("<?xml version=\"1.0\" encoding=\"UTF-8\"?>") +
         "<ChangeResourceRecordSetsRequest xmlns=\"https://route53.amazonaws.com/doc/2013-04-01/\">"
         "<ChangeBatch><Changes><Change><Action>UPSERT</Action><ResourceRecordSet><Name>" +
-        xml_escape(name_private) + "</Name><Type>A</Type><TTL>" + std::to_string(ttl_private) +
+        xml_escape(record.fqdn) + "</Name><Type>A</Type><TTL>" + std::to_string(record.ttl) +
         "</TTL><ResourceRecords><ResourceRecord><Value>" + xml_escape(value) +
         "</Value></ResourceRecord></ResourceRecords></ResourceRecordSet></Change></Changes></ChangeBatch>"
         "</ChangeResourceRecordSetsRequest>";
-    (void)request("POST", write_path(), "", payload);
-    logger_private->debug("Route 53 accepted the update for " + name_private);
+    (void)request(record, "POST", rrset_path(record) + "/", "", payload);
+    logger_private->debug("Route 53 accepted the update for " + record.name);
   }
 
  private:
-  std::string read_path() const {
-    return "/2013-04-01/hostedzone/" + zone_private + "/rrset";
+  const Record* find(const std::string& name) const {
+    for (const auto& record : records_private)
+      if (record.name == name) return &record;
+    return nullptr;
   }
-  std::string write_path() const { return read_path() + "/"; }
 
-  std::string request(const std::string& method, const std::string& path,
+  const Record& lookup(const std::string& name) const {
+    const auto* record = find(name);
+    if (!record) throw std::runtime_error("unknown record: " + name);
+    return *record;
+  }
+
+  static std::string rrset_path(const Record& record) {
+    return "/2013-04-01/hostedzone/" + record.zone + "/rrset";
+  }
+
+  std::string request(const Record& record, const std::string& method, const std::string& path,
                       const std::string& query, const std::string& payload) const {
     logger_private->debug(method + " https://" + host_private + path);
     const auto signed_request = manannan::aws::sign_v4(
-        method, host_private, path, query, payload, credentials_private, region_private, "route53");
+        method, host_private, path, query, payload, record.credentials, region_private, "route53");
     const auto url = "https://" + host_private + path + (query.empty() ? "" : "?" + query);
     std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> curl(curl_easy_init(), curl_easy_cleanup);
     if (!curl) throw std::runtime_error("cannot initialise HTTP client");
@@ -144,7 +284,7 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
         "Authorization: " + signed_request.authorization,
         "x-amz-date: " + signed_request.amz_date,
         "x-amz-content-sha256: " + signed_request.content_sha256,
-        credentials_private.session_token.empty() ? "" : "x-amz-security-token: " + credentials_private.session_token,
+        record.credentials.session_token.empty() ? "" : "x-amz-security-token: " + record.credentials.session_token,
         "Content-Type: application/xml"};
     for (const auto& header : values)
       if (!header.empty()) raw_headers = curl_slist_append(raw_headers, header.c_str());
@@ -156,7 +296,7 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
     curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, append_data);
     curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &response);
     curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT, timeout_private);
-    curl_easy_setopt(curl.get(), CURLOPT_USERAGENT, "Manannan/0.1");
+    curl_easy_setopt(curl.get(), CURLOPT_USERAGENT, "Manannan/0.2");
     if (method == "POST") {
       curl_easy_setopt(curl.get(), CURLOPT_POST, 1L);
       curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDS, payload.c_str());
@@ -172,13 +312,10 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
     return response;
   }
 
-  std::string zone_private;
-  std::string name_private;
-  unsigned ttl_private;
   std::string host_private;
   std::string region_private;
-  long timeout_private;
-  Credentials credentials_private;
+  long timeout_private{};
+  std::vector<Record> records_private;
   std::shared_ptr<manannan::loggers::Logger> logger_private;
 };
 

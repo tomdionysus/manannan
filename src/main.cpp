@@ -2,6 +2,7 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <vector>
 #include "manannan/config.h"
 #include "manannan/loggers/logger_stdio.h"
 #include "manannan/plugin_loader.h"
@@ -14,12 +15,22 @@ int main(int argc, char** argv) {
     logger->set_level(config.log_level);
     manannan::PluginLoader loader(logger);
     loader.scan(config.plugin_directories);
+    // The loader has checked each descriptor's type. dynamic_cast is not used
+    // because RTTI is not reliably shared with RTLD_LOCAL plugins (libc++ on
+    // x86_64 compares type_info by address).
     auto source_loaded = loader.create(manannan::PluginType::source, config.source_plugin, config.document);
-    auto registry_loaded = loader.create(manannan::PluginType::registry, config.registry_plugin, config.document);
-    auto* source = dynamic_cast<manannan::SourcePlugin*>(&source_loaded.instance());
-    auto* registry = dynamic_cast<manannan::RegistryPlugin*>(&registry_loaded.instance());
-    if (!source || !registry) throw std::runtime_error("plugin returned an object of the wrong type");
+    auto& source = static_cast<manannan::SourcePlugin&>(source_loaded.instance());
+    std::vector<manannan::LoadedPlugin> registries_loaded;
+    std::vector<manannan::Registry> registries;
+    for (const auto& name : config.registry_plugins) {
+      registries_loaded.push_back(loader.create(manannan::PluginType::registry, name, config.document));
+      auto* registry = static_cast<manannan::RegistryPlugin*>(&registries_loaded.back().instance());
+      const auto records = registry->records();
+      if (records.empty()) throw std::runtime_error("registry " + name + " has no records configured");
+      for (const auto& record : records) logger->info("managing " + name + ":" + record);
+      registries.push_back({name, registry});
+    }
     logger->debug("Manannan started");
-    return manannan::Service(*source, *registry, config.cadence, logger).run();
+    return manannan::Service(source, std::move(registries), config.cadence, logger).run();
   } catch (const std::exception& error) { logger->error(error.what()); return 1; }
 }

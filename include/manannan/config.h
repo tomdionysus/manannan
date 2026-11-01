@@ -10,7 +10,7 @@ struct Config {
   YAML::Node document;
   std::vector<std::filesystem::path> plugin_directories;
   std::string source_plugin;
-  std::string registry_plugin;
+  std::vector<std::string> registry_plugins;
   std::chrono::milliseconds cadence;
   loggers::LogLevel log_level{loggers::INFO};
 };

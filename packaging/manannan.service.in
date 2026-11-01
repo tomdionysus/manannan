@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/sbin/manannan /usr/local/etc/manannan/manannan.yaml
+ExecStart=@CMAKE_INSTALL_FULL_SBINDIR@/manannan @CMAKE_INSTALL_FULL_SYSCONFDIR@/manannan/manannan.yaml
 Restart=on-failure
 RestartSec=10s
 DynamicUser=yes
@@ -17,7 +17,7 @@ ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
-EnvironmentFile=-/usr/local/etc/manannan/environment
+EnvironmentFile=-@CMAKE_INSTALL_FULL_SYSCONFDIR@/manannan/environment
 
 [Install]
 WantedBy=multi-user.target

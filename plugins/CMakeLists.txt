@@ -1,2 +1,2 @@
-# Plugin support is intentionally not part of the Manannan core.
-
+add_subdirectory(amazon_check_ip)
+add_subdirectory(aws_route53)
