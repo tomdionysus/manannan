@@ -19,97 +19,45 @@ Bundled plugins:
 | `amazon_check_ip` | source | Public IPv4 address from `checkip.amazonaws.com` |
 | `aws_route53` | registry | `A` records in AWS Route 53, across any number of hosted zones and AWS accounts |
 
-Other sources and registries are separate shared libraries; see
-[docs/PLUGINS.md](docs/PLUGINS.md).
+## Install
 
-## Install the package
-
-On Debian trixie or Raspberry Pi OS (trixie, 64-bit), add the package
-repository and install:
+Packages are published for Debian trixie and Raspberry Pi OS (trixie, 64-bit)
+on arm64. Add the package repository and install:
 
 ```sh
 sudo curl -fsSLo /etc/apt/sources.list.d/tomcully.sources https://tomcully.com/apt/tomcully.sources
 sudo apt update && sudo apt install manannan
 ```
 
-The package installs the daemon to `/usr/sbin`, the plugins to
-`/usr/lib/<triplet>/manannan/plugins`, the configuration to `/etc/manannan` and
-the service disabled. Set the records in `/etc/manannan/manannan.yaml` and the
-keys in `/etc/manannan/environment` (see [Configuration](#configuration)), then
-`sudo systemctl enable --now manannan`. Updates arrive with `sudo apt upgrade`.
-`manannan-dev` has the headers for building plugins.
+The service is installed but not enabled, because the packaged configuration
+is an example. Set it up in three steps:
 
-A host that ran a source install under `/usr/local` should uninstall it first
-(see [Uninstalling](#uninstalling), keeping a copy of its configuration and
-environment file): the unit under `/usr/local/lib/systemd/system` would
-otherwise override the package's.
+1. Put your records in `/etc/manannan/manannan.yaml` (see
+   [Configuration](#configuration)).
+2. Put your AWS keys in `/etc/manannan/environment` (see
+   [Keys](#keys)).
+3. Start the service:
 
-To build from source instead, read on.
+   ```sh
+   sudo systemctl enable --now manannan
+   journalctl -u manannan -f
+   ```
 
-## Requirements
+On other distributions and architectures, build from source: see
+[docs/building.md](docs/building.md).
 
-- Linux with systemd. The package lists below cover Debian 12+, Ubuntu 22.04+,
-  Raspberry Pi OS, Fedora, RHEL 9+ and its rebuilds, Arch and openSUSE
-  Tumbleweed.
-- A C++20 compiler, CMake 3.20+, yaml-cpp 0.6+, libcurl and OpenSSL libcrypto;
-  GoogleTest 1.12+ for the tests.
-
-## Build dependencies
-
-```sh
-# Debian, Ubuntu, Raspberry Pi OS
-sudo apt install build-essential cmake git libyaml-cpp-dev libcurl4-openssl-dev libssl-dev libgtest-dev
-
-# Fedora
-sudo dnf install gcc-c++ make cmake git yaml-cpp-devel libcurl-devel openssl-devel gtest-devel
-
-# Rocky Linux, AlmaLinux (yaml-cpp comes from EPEL)
-sudo dnf install epel-release && sudo crb enable
-sudo dnf install gcc-c++ make cmake git yaml-cpp-devel libcurl-devel openssl-devel gtest-devel
-
-# Arch Linux
-sudo pacman -S --needed base-devel cmake git yaml-cpp curl openssl gtest
-
-# openSUSE Tumbleweed
-sudo zypper install gcc-c++ make cmake git yaml-cpp-devel libcurl-devel libopenssl-devel gtest
-```
-
-On RHEL itself, enable CodeReady Builder with `subscription-manager` and
-install the `epel-release` RPM from the Fedora project instead of the first
-EL line.
-
-## Build and install
-
-```sh
-git clone https://github.com/tomdionysus/manannan.git
-cd manannan
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMANANNAN_BUILD_TESTING=ON
-cmake --build build
-./build/tests/manannan_tests
-sudo cmake --install build
-```
-
-The tests need no network: every request they make goes to a server of their
-own on the loopback interface. Leave out `-DMANANNAN_BUILD_TESTING=ON` to build
-without GoogleTest.
-
-The default prefix is `/usr/local`; set `-DCMAKE_INSTALL_PREFIX` to change it.
-The installed configuration and unit file are generated with the actual install
-paths, so they stay consistent under any prefix or libdir layout.
-
-| Installed | Path (default prefix) |
+| Installed | Path |
 | --- | --- |
-| Daemon | `/usr/local/sbin/manannan` |
-| Manual page | `/usr/local/share/man/man8/manannan.8` |
-| Plugins | `/usr/local/lib/manannan/plugins` (`lib64` on RPM-based distributions) |
-| Configuration | `/usr/local/etc/manannan/manannan.yaml` |
-| Environment file (you create it) | `/usr/local/etc/manannan/environment` |
-| systemd unit | `/usr/local/lib/systemd/system/manannan.service` |
-| Plugin headers | `/usr/local/include/manannan` |
-
-Reinstalling never overwrites an existing `manannan.yaml`.
+| Daemon | `/usr/sbin/manannan` |
+| Configuration | `/etc/manannan/manannan.yaml` |
+| Keys | `/etc/manannan/environment` (root only) |
+| Plugins | `/usr/lib/<triplet>/manannan/plugins`, for example `/usr/lib/aarch64-linux-gnu/manannan/plugins` |
+| systemd unit | `/usr/lib/systemd/system/manannan.service` |
+| Manual page | `man 8 manannan` |
 
 ## Configuration
+
+`/etc/manannan/manannan.yaml`:
 
 ```yaml
 manannan:
@@ -119,7 +67,7 @@ manannan:
   registries:
     - aws_route53
   plugin_directories:
-    - /usr/local/lib/manannan/plugins
+    - /usr/lib/aarch64-linux-gnu/manannan/plugins
 
 source:
   amazon_check_ip:
@@ -141,17 +89,21 @@ registry:
           secret_access_key: ${OFFICE_AWS_SECRET_ACCESS_KEY}
 ```
 
-The `manannan` block selects plugins. Each plugin reads its own block, at
-`source.<name>` or `registry.<name>`. A value written as `${NAME}` is taken
-from the environment.
+Usually only the `records` list needs editing: the packaged file already has
+the right `plugin_directories` for the machine. The `manannan` block selects
+plugins, and each plugin reads its own block, at `source.<name>` or
+`registry.<name>`. A value written as `${NAME}` is taken from the environment.
 
-Secrets belong in the environment file, which the unit loads via
-`EnvironmentFile=`. It must stay root-only because `manannan.yaml` is
-world-readable (the service runs under `DynamicUser=`):
+The configuration is a conffile: upgrades keep your changes.
+
+### Keys
+
+Secrets belong in `/etc/manannan/environment`, never in `manannan.yaml`, which
+is world-readable. The package creates the file empty and root-only; edit it
+with:
 
 ```sh
-sudo install -m 600 /dev/null /usr/local/etc/manannan/environment
-sudoedit /usr/local/etc/manannan/environment
+sudoedit /etc/manannan/environment
 ```
 
 ```
@@ -186,9 +138,10 @@ Attach it to a dedicated IAM user and issue that user an access key.
 
 ## Running
 
+After changing the configuration or the keys, restart the service:
+
 ```sh
-sudo systemctl daemon-reload
-sudo systemctl enable --now manannan
+sudo systemctl restart manannan
 journalctl -u manannan -f
 ```
 
@@ -208,11 +161,21 @@ unknown keys, duplicate records, missing zones and incomplete credentials are
 all rejected. Runtime failures, such as a provider returning an error, are
 logged against the record and retried on the next cycle.
 
-For a full trace, set `LOG_LEVEL=debug` in the environment file and restart.
-The variable overrides `log_level` in the configuration.
+For a full trace, add `LOG_LEVEL=debug` to `/etc/manannan/environment` and
+restart. The variable overrides `log_level` in the configuration.
 
-To upgrade, `git pull`, rebuild, run the tests and reinstall as above, then
-`sudo systemctl restart manannan`.
+The service starts at boot once the network is online, and runs as an
+unprivileged dynamic user with no capabilities and a restricted set of
+system calls.
+
+## Upgrading
+
+```sh
+sudo apt update && sudo apt upgrade
+```
+
+An upgrade restarts the service if it is running, and keeps your
+configuration and keys.
 
 ## Settings
 
@@ -256,35 +219,20 @@ Each record:
 ## Uninstalling
 
 ```sh
-sudo systemctl disable --now manannan
-sudo rm /usr/local/sbin/manannan /usr/local/lib/systemd/system/manannan.service /usr/local/share/man/man8/manannan.8
-sudo rm -rf /usr/local/lib*/manannan /usr/local/include/manannan /usr/local/etc/manannan
-sudo systemctl daemon-reload
+sudo apt remove manannan   # keeps /etc/manannan
+sudo apt purge manannan    # also deletes /etc/manannan, keys included
 ```
 
-The last `rm` also removes the configuration and the environment file.
+## More
 
-For a package install, `sudo apt purge manannan manannan-dev` removes
-everything, including `/etc/manannan`; `apt remove` keeps the configuration.
-
-## Development
-
-| Option | Default | |
-| --- | --- | --- |
-| `MANANNAN_BUILD_TESTING` | `OFF` | Build `manannan_tests` (GoogleTest) |
-| `MANANNAN_WARNINGS_AS_ERRORS` | `OFF` | Treat compiler warnings as errors |
-| `MANANNAN_COVERAGE` | `OFF` | Instrument the daemon, plugins and tests for gcov |
-
-`scripts/ci.sh` is what CI runs on Debian trixie: the tests in a release
-build with warnings as errors, under AddressSanitizer and
-UndefinedBehaviorSanitizer, and in a coverage build with an lcov report.
-`scripts/build-deb.sh` builds the Debian packages; see
-[docs/packaging.md](docs/packaging.md).
-
-The project also builds on macOS (`brew install cmake yaml-cpp googletest
-openssl`) for development; there is no service integration there.
-[docs/PLUGINS.md](docs/PLUGINS.md) describes the plugin contract, and
-[docs/NAME.md](docs/NAME.md) the name.
+- [docs/building.md](docs/building.md): building from source, installing
+  under `/usr/local`, moving a source install to the package, and
+  development.
+- [docs/PLUGINS.md](docs/PLUGINS.md): writing source and registry plugins
+  (headers in `manannan-dev`).
+- [docs/packaging.md](docs/packaging.md): how the Debian packages are built
+  and versioned.
+- [docs/NAME.md](docs/NAME.md): the name.
 
 ## Licence
 
