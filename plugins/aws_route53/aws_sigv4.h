@@ -15,9 +15,8 @@ struct SignedRequest {
   std::string amz_date;
   std::string content_sha256;
 };
-SignedRequest sign_v4(const std::string& method, const std::string& host, const std::string& path, const std::string& query,
-                      const std::string& payload, const Credentials& credentials, const std::string& region,
-                      const std::string& service, std::chrono::system_clock::time_point now);
+SignedRequest sign_v4(const std::string& method, const std::string& host, const std::string& path, const std::string& query, const std::string& payload,
+                      const Credentials& credentials, const std::string& region, const std::string& service, std::chrono::system_clock::time_point now);
 // Percent-encodes everything outside RFC 3986's unreserved characters.
 std::string url_encode(const std::string& value);
 }  // namespace manannan::aws

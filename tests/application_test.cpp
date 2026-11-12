@@ -3,6 +3,8 @@
 // local check IP and Route 53 endpoints until SIGTERM, and the executable's
 // arguments, streams and exit status.
 
+#include "manannan/application.h"
+
 #include <gtest/gtest.h>
 #include <pthread.h>
 #include <spawn.h>
@@ -20,7 +22,6 @@
 
 #include "fixtures/http_server.h"
 #include "fixtures/support.h"
-#include "manannan/application.h"
 #include "manannan/version.h"
 
 extern char** environ;
@@ -55,9 +56,7 @@ Outcome run(const std::vector<std::string>& arguments) {
   return {status, out.str(), err.str(), logger};
 }
 
-std::string configuration(const std::string& body) {
-  return write_file(work_directory("application") / "manannan.yaml", body).string();
-}
+std::string configuration(const std::string& body) { return write_file(work_directory("application") / "manannan.yaml", body).string(); }
 
 TEST(Application, PrintsItsVersion) {
   const auto outcome = run({"--version"});
@@ -80,10 +79,10 @@ TEST(Application, RefusesAConfigurationItCannotUse) {
 }
 
 TEST(Application, RefusesARegistryWithNoRecords) {
-  const auto outcome = run({configuration("manannan:\n  cadence: 1s\n  log_level: debug\n  source: test_source\n"
-                                          "  registries: [test_registry]\n  plugin_directories: [" +
-                                          (test_plugin_dir / "good").string() +
-                                          "]\nsource:\n  test_source: {value: x}\nregistry:\n  test_registry: {records: []}\n")});
+  const auto outcome =
+      run({configuration("manannan:\n  cadence: 1s\n  log_level: debug\n  source: test_source\n"
+                         "  registries: [test_registry]\n  plugin_directories: [" +
+                         (test_plugin_dir / "good").string() + "]\nsource:\n  test_source: {value: x}\nregistry:\n  test_registry: {records: []}\n")});
   EXPECT_EQ(outcome.status, 1);
   EXPECT_TRUE(outcome.logger->logged(manannan::loggers::ERROR, "registry test_registry has no records configured"));
   EXPECT_EQ(outcome.logger->level, manannan::loggers::DEBUG);
@@ -111,18 +110,18 @@ TEST(Application, PublishesTheAddressUntilSignalled) {
     return HttpResponse{200, registered.empty() ? std::string("<ListResourceRecordSetsResponse/>")
                                                 : "<ResourceRecordSet><Name>home.example.com.</Name><Type>A</Type>"
                                                   "<ResourceRecords><ResourceRecord><Value>" +
-                                                      registered + "</Value></ResourceRecord></ResourceRecords>"
-                                                                   "</ResourceRecordSet>"};
+                                                      registered +
+                                                      "</Value></ResourceRecord></ResourceRecords>"
+                                                      "</ResourceRecordSet>"};
   });
 
-  const auto outcome = run({configuration(
-      "manannan:\n  cadence: 10ms\n  source: amazon_check_ip\n  registries: [aws_route53]\n"
-      "  plugin_directories: [" +
-      check_ip_plugin_dir.string() + ", " + route53_plugin_dir.string() +
-      "]\nsource:\n  amazon_check_ip:\n    endpoint: " + check_ip.url() +
-      "\nregistry:\n  aws_route53:\n    endpoint: " + route53.url() +
-      "\n    credentials: {access_key_id: AKID, secret_access_key: secret}\n"
-      "    records:\n      - {name: home.example.com, hosted_zone_id: Z1}\n")});
+  const auto outcome =
+      run({configuration("manannan:\n  cadence: 10ms\n  source: amazon_check_ip\n  registries: [aws_route53]\n"
+                         "  plugin_directories: [" +
+                         check_ip_plugin_dir.string() + ", " + route53_plugin_dir.string() + "]\nsource:\n  amazon_check_ip:\n    endpoint: " + check_ip.url() +
+                         "\nregistry:\n  aws_route53:\n    endpoint: " + route53.url() +
+                         "\n    credentials: {access_key_id: AKID, secret_access_key: secret}\n"
+                         "    records:\n      - {name: home.example.com, hosted_zone_id: Z1}\n")});
 
   EXPECT_EQ(outcome.status, 0);
   EXPECT_EQ(registered, "203.0.113.7");
@@ -158,8 +157,7 @@ std::pair<int, std::string> run_daemon(const std::vector<std::string>& arguments
   ::close(pipe_ends[1]);
   std::string output;
   char buffer[1024];
-  for (ssize_t received; (received = ::read(pipe_ends[0], buffer, sizeof(buffer))) > 0;)
-    output.append(buffer, static_cast<std::size_t>(received));
+  for (ssize_t received; (received = ::read(pipe_ends[0], buffer, sizeof(buffer))) > 0;) output.append(buffer, static_cast<std::size_t>(received));
   ::close(pipe_ends[0]);
   if (spawned != 0) return {-1, output};
   int status = 0;

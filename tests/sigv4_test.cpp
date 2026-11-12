@@ -12,16 +12,13 @@ using manannan::aws::Credentials;
 using manannan::aws::sign_v4;
 using manannan::aws::url_encode;
 
-std::chrono::system_clock::time_point at(long long seconds) {
-  return std::chrono::system_clock::time_point(std::chrono::seconds(seconds));
-}
+std::chrono::system_clock::time_point at(long long seconds) { return std::chrono::system_clock::time_point(std::chrono::seconds(seconds)); }
 
 const Credentials example{"AKIDEXAMPLE", "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY", ""};
 
 TEST(SigV4, SignsARequestWithoutASessionToken) {
-  const auto signed_request = sign_v4("GET", "route53.amazonaws.com", "/2013-04-01/hostedzone/Z1/rrset",
-                                      "maxitems=1&name=a.example.com.&type=A", "", example, "us-east-1", "route53",
-                                      at(1440938160));
+  const auto signed_request = sign_v4("GET", "route53.amazonaws.com", "/2013-04-01/hostedzone/Z1/rrset", "maxitems=1&name=a.example.com.&type=A", "", example,
+                                      "us-east-1", "route53", at(1440938160));
   EXPECT_EQ(signed_request.amz_date, "20150830T123600Z");
   EXPECT_EQ(signed_request.content_sha256, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
   EXPECT_EQ(signed_request.authorization,
@@ -33,8 +30,8 @@ TEST(SigV4, SignsARequestWithoutASessionToken) {
 TEST(SigV4, SignsTheSessionTokenWhenThereIsOne) {
   auto credentials = example;
   credentials.session_token = "TOKEN123";
-  const auto signed_request = sign_v4("POST", "127.0.0.1:8080", "/2013-04-01/hostedzone/Z1/rrset/", "", "<x/>",
-                                      credentials, "eu-west-1", "route53", at(1794445323));
+  const auto signed_request =
+      sign_v4("POST", "127.0.0.1:8080", "/2013-04-01/hostedzone/Z1/rrset/", "", "<x/>", credentials, "eu-west-1", "route53", at(1794445323));
   EXPECT_EQ(signed_request.amz_date, "20261112T010203Z");
   EXPECT_EQ(signed_request.content_sha256, "2a31f44da4bd7decbbd3ddfd1a37ae04d02ec665e2c2688816ccc65631586ed1");
   EXPECT_EQ(signed_request.authorization,

@@ -1,7 +1,8 @@
 #include <curl/curl.h>
+
 #include <algorithm>
-#include <chrono>
 #include <cctype>
+#include <chrono>
 #include <cstdlib>
 #include <initializer_list>
 #include <memory>
@@ -30,8 +31,7 @@ std::string environment(const std::string& name) {
 }
 
 std::string lowercase(std::string value) {
-  std::transform(value.begin(), value.end(), value.begin(),
-                 [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
+  std::transform(value.begin(), value.end(), value.begin(), [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
   return value;
 }
 
@@ -57,8 +57,7 @@ std::string scalar(const YAML::Node& node, const char* key, const std::string& w
 
 // A value of the form ${NAME} is read from the environment variable NAME.
 std::string expand(const std::string& value) {
-  if (value.size() > 3 && value.starts_with("${") && value.ends_with("}"))
-    return environment(value.substr(2, value.size() - 3));
+  if (value.size() > 3 && value.starts_with("${") && value.ends_with("}")) return environment(value.substr(2, value.size() - 3));
   return value;
 }
 
@@ -82,15 +81,17 @@ Credentials read_credentials(const YAML::Node& node, const std::string& where, b
   return credentials;
 }
 
-bool complete(const Credentials& credentials) {
-  return !credentials.access_key_id.empty() && !credentials.secret_access_key.empty();
-}
+bool complete(const Credentials& credentials) { return !credentials.access_key_id.empty() && !credentials.secret_access_key.empty(); }
 
 unsigned read_ttl(const YAML::Node& node, unsigned fallback, const std::string& where) {
   const auto value = node["ttl"];
   if (!value) return fallback;
   unsigned ttl = 0;
-  try { ttl = value.as<unsigned>(); } catch (const YAML::Exception&) { ttl = 0; }
+  try {
+    ttl = value.as<unsigned>();
+  } catch (const YAML::Exception&) {
+    ttl = 0;
+  }
   if (ttl == 0 || ttl > 2'147'483'647) throw std::runtime_error(where + ": 'ttl' must be a positive number of seconds");
   return ttl;
 }
@@ -99,20 +100,30 @@ std::string xml_escape(const std::string& value) {
   std::string result;
   for (char character : value) {
     switch (character) {
-      case '&': result += "&amp;"; break;
-      case '<': result += "&lt;"; break;
-      case '>': result += "&gt;"; break;
-      case '\"': result += "&quot;"; break;
-      case '\'': result += "&apos;"; break;
-      default: result += character;
+      case '&':
+        result += "&amp;";
+        break;
+      case '<':
+        result += "&lt;";
+        break;
+      case '>':
+        result += "&gt;";
+        break;
+      case '\"':
+        result += "&quot;";
+        break;
+      case '\'':
+        result += "&apos;";
+        break;
+      default:
+        result += character;
     }
   }
   return result;
 }
 
 std::string xml_unescape(std::string value) {
-  const std::vector<std::pair<std::string, std::string>> replacements{
-      {"&lt;", "<"}, {"&gt;", ">"}, {"&quot;", "\""}, {"&apos;", "'"}, {"&amp;", "&"}};
+  const std::vector<std::pair<std::string, std::string>> replacements{{"&lt;", "<"}, {"&gt;", ">"}, {"&quot;", "\""}, {"&apos;", "'"}, {"&amp;", "&"}};
   for (const auto& [encoded, plain] : replacements) {
     std::size_t position = 0;
     while ((position = value.find(encoded, position)) != std::string::npos) {
@@ -128,10 +139,8 @@ std::string xml_unescape(std::string value) {
 std::string decode_dns_name(const std::string& value) {
   std::string result;
   for (std::size_t i = 0; i < value.size(); ++i) {
-    if (value[i] == '\\' && i + 3 < value.size() &&
-        std::isdigit(static_cast<unsigned char>(value[i + 1])) &&
-        std::isdigit(static_cast<unsigned char>(value[i + 2])) &&
-        std::isdigit(static_cast<unsigned char>(value[i + 3]))) {
+    if (value[i] == '\\' && i + 3 < value.size() && std::isdigit(static_cast<unsigned char>(value[i + 1])) &&
+        std::isdigit(static_cast<unsigned char>(value[i + 2])) && std::isdigit(static_cast<unsigned char>(value[i + 3]))) {
       result += static_cast<char>(std::stoi(value.substr(i + 1, 3), nullptr, 8));
       i += 3;
     } else {
@@ -151,12 +160,10 @@ struct Record {
 
 class AwsRoute53 final : public manannan::RegistryPlugin {
  public:
-  AwsRoute53(const YAML::Node& config, std::shared_ptr<manannan::loggers::Logger> logger)
-      : logger_private(std::move(logger)) {
+  AwsRoute53(const YAML::Node& config, std::shared_ptr<manannan::loggers::Logger> logger) : logger_private(std::move(logger)) {
     const std::string where = "registry.aws_route53";
     if (!config.IsMap()) throw std::runtime_error(where + " must be a mapping");
-    if (config["hosted_zone_id"] || config["record_name"])
-      throw std::runtime_error(where + ": set hosted_zone_id and name on each entry in 'records'");
+    if (config["hosted_zone_id"] || config["record_name"]) throw std::runtime_error(where + ": set hosted_zone_id and name on each entry in 'records'");
     check_keys(config, where, {"endpoint", "signing_region", "timeout_seconds", "ttl", "credentials", "records"});
 
     // The endpoint is a host name, optionally with a port and an http:// or
@@ -174,14 +181,12 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
       throw std::runtime_error(where + ": 'endpoint' must be a host name, optionally with a scheme and port");
     region_private = config["signing_region"].as<std::string>("us-east-1");
     timeout_private = config["timeout_seconds"].as<long>(10);
-    if (region_private.empty() || timeout_private <= 0)
-      throw std::runtime_error(where + ": signing_region must be set and timeout_seconds must be positive");
+    if (region_private.empty() || timeout_private <= 0) throw std::runtime_error(where + ": signing_region must be set and timeout_seconds must be positive");
     const auto default_ttl = read_ttl(config, 60, where);
     const auto base_credentials = read_credentials(config["credentials"], where, true);
 
     const auto records = config["records"];
-    if (!records || !records.IsSequence() || records.size() == 0)
-      throw std::runtime_error(where + ": 'records' must list at least one record");
+    if (!records || !records.IsSequence() || records.size() == 0) throw std::runtime_error(where + ": 'records' must list at least one record");
     for (std::size_t index = 0; index < records.size(); ++index) {
       const auto entry = records[index];
       const auto entry_where = where + ".records[" + std::to_string(index) + "]";
@@ -199,8 +204,7 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
       record.ttl = read_ttl(entry, default_ttl, entry_where);
       if (entry["credentials"]) {
         record.credentials = read_credentials(entry["credentials"], entry_where, false);
-        if (!complete(record.credentials))
-          throw std::runtime_error(entry_where + ": credentials need access_key_id and secret_access_key");
+        if (!complete(record.credentials)) throw std::runtime_error(entry_where + ": credentials need access_key_id and secret_access_key");
       } else {
         if (!complete(base_credentials))
           throw std::runtime_error(entry_where + " (" + record.name + ") has no credentials: set " + where +
@@ -208,13 +212,11 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
         record.credentials = base_credentials;
       }
       if (find(record.name)) throw std::runtime_error(where + ": record " + record.name + " is listed twice");
-      logger_private->debug("record " + record.name + " in zone " + record.zone + " with TTL " +
-                            std::to_string(record.ttl) +
+      logger_private->debug("record " + record.name + " in zone " + record.zone + " with TTL " + std::to_string(record.ttl) +
                             (entry["credentials"] ? " using its own credentials" : " using the base credentials"));
       records_private.push_back(std::move(record));
     }
-    if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK)
-      throw std::runtime_error("cannot initialise libcurl");  // LCOV_EXCL_LINE
+    if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) throw std::runtime_error("cannot initialise libcurl");  // LCOV_EXCL_LINE
   }
 
   ~AwsRoute53() override {
@@ -236,15 +238,12 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
     const std::regex set_pattern("<ResourceRecordSet>([\\s\\S]*?)</ResourceRecordSet>");
     const std::regex name_pattern("<Name>([^<]+)</Name>");
     const std::regex value_pattern("<ResourceRecord>\\s*<Value>([^<]+)</Value>");
-    for (auto current = std::sregex_iterator(response.begin(), response.end(), set_pattern);
-         current != std::sregex_iterator(); ++current) {
+    for (auto current = std::sregex_iterator(response.begin(), response.end(), set_pattern); current != std::sregex_iterator(); ++current) {
       const auto set = (*current)[1].str();
       std::smatch name_match;
       std::smatch value_match;
-      if (std::regex_search(set, name_match, name_pattern) &&
-          decode_dns_name(xml_unescape(name_match[1].str())) == record.fqdn &&
-          set.find("<Type>A</Type>") != std::string::npos &&
-          std::regex_search(set, value_match, value_pattern)) {
+      if (std::regex_search(set, name_match, name_pattern) && decode_dns_name(xml_unescape(name_match[1].str())) == record.fqdn &&
+          set.find("<Type>A</Type>") != std::string::npos && std::regex_search(set, value_match, value_pattern)) {
         const auto value = xml_unescape(value_match[1].str());
         logger_private->debug(record.name + " is registered as " + value);
         return value;
@@ -258,12 +257,12 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
     const auto& record = lookup(name);
     logger_private->debug("setting A record " + record.fqdn + " to " + value);
     const auto payload = std::string("<?xml version=\"1.0\" encoding=\"UTF-8\"?>") +
-        "<ChangeResourceRecordSetsRequest xmlns=\"https://route53.amazonaws.com/doc/2013-04-01/\">"
-        "<ChangeBatch><Changes><Change><Action>UPSERT</Action><ResourceRecordSet><Name>" +
-        xml_escape(record.fqdn) + "</Name><Type>A</Type><TTL>" + std::to_string(record.ttl) +
-        "</TTL><ResourceRecords><ResourceRecord><Value>" + xml_escape(value) +
-        "</Value></ResourceRecord></ResourceRecords></ResourceRecordSet></Change></Changes></ChangeBatch>"
-        "</ChangeResourceRecordSetsRequest>";
+                         "<ChangeResourceRecordSetsRequest xmlns=\"https://route53.amazonaws.com/doc/2013-04-01/\">"
+                         "<ChangeBatch><Changes><Change><Action>UPSERT</Action><ResourceRecordSet><Name>" +
+                         xml_escape(record.fqdn) + "</Name><Type>A</Type><TTL>" + std::to_string(record.ttl) +
+                         "</TTL><ResourceRecords><ResourceRecord><Value>" + xml_escape(value) +
+                         "</Value></ResourceRecord></ResourceRecords></ResourceRecordSet></Change></Changes></ChangeBatch>"
+                         "</ChangeResourceRecordSetsRequest>";
     (void)request(record, "POST", rrset_path(record) + "/", "", payload);
     logger_private->debug("Route 53 accepted the update for " + record.name);
   }
@@ -281,27 +280,21 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
     return *record;
   }
 
-  static std::string rrset_path(const Record& record) {
-    return "/2013-04-01/hostedzone/" + record.zone + "/rrset";
-  }
+  static std::string rrset_path(const Record& record) { return "/2013-04-01/hostedzone/" + record.zone + "/rrset"; }
 
-  std::string request(const Record& record, const std::string& method, const std::string& path,
-                      const std::string& query, const std::string& payload) const {
+  std::string request(const Record& record, const std::string& method, const std::string& path, const std::string& query, const std::string& payload) const {
     const auto base = scheme_private + "://" + host_private + path;
     logger_private->debug(method + " " + base);
-    const auto signed_request = manannan::aws::sign_v4(method, host_private, path, query, payload, record.credentials,
-                                                       region_private, "route53", std::chrono::system_clock::now());
+    const auto signed_request =
+        manannan::aws::sign_v4(method, host_private, path, query, payload, record.credentials, region_private, "route53", std::chrono::system_clock::now());
     const auto url = base + (query.empty() ? "" : "?" + query);
     std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> curl(curl_easy_init(), curl_easy_cleanup);
     if (!curl) throw std::runtime_error("cannot initialise HTTP client");  // LCOV_EXCL_LINE
 
     curl_slist* raw_headers = nullptr;
     const std::vector<std::string> values{
-        "Authorization: " + signed_request.authorization,
-        "x-amz-date: " + signed_request.amz_date,
-        "x-amz-content-sha256: " + signed_request.content_sha256,
-        record.credentials.session_token.empty() ? "" : "x-amz-security-token: " + record.credentials.session_token,
-        "Content-Type: application/xml"};
+        "Authorization: " + signed_request.authorization, "x-amz-date: " + signed_request.amz_date, "x-amz-content-sha256: " + signed_request.content_sha256,
+        record.credentials.session_token.empty() ? "" : "x-amz-security-token: " + record.credentials.session_token, "Content-Type: application/xml"};
     for (const auto& header : values)
       if (!header.empty()) raw_headers = curl_slist_append(raw_headers, header.c_str());
     std::unique_ptr<curl_slist, decltype(&curl_slist_free_all)> headers(raw_headers, curl_slist_free_all);
@@ -321,10 +314,8 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
     const auto result = curl_easy_perform(curl.get());
     long status = 0;
     curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &status);
-    if (result != CURLE_OK)
-      throw std::runtime_error(std::string("Route 53 request failed: ") + curl_easy_strerror(result));
-    if (status < 200 || status >= 300)
-      throw std::runtime_error("Route 53 returned HTTP " + std::to_string(status) + ": " + response);
+    if (result != CURLE_OK) throw std::runtime_error(std::string("Route 53 request failed: ") + curl_easy_strerror(result));
+    if (status < 200 || status >= 300) throw std::runtime_error("Route 53 returned HTTP " + std::to_string(status) + ": " + response);
     return response;
   }
 
@@ -342,10 +333,8 @@ manannan::Plugin* create(const YAML::Node& config, std::shared_ptr<manannan::log
   return new AwsRoute53(config, std::move(logger));
 }
 void destroy(manannan::Plugin* plugin) { delete plugin; }
-const manannan::PluginDescriptor descriptor{manannan::plugin_abi_version, manannan::PluginType::registry,
-                                             "aws_route53", "registry.aws_route53", create, destroy};
-}
+const manannan::PluginDescriptor descriptor{
+    manannan::plugin_abi_version, manannan::PluginType::registry, "aws_route53", "registry.aws_route53", create, destroy};
+}  // namespace
 
-extern "C" __attribute__((visibility("default"))) const manannan::PluginDescriptor* manannan_plugin_descriptor() {
-  return &descriptor;
-}
+extern "C" __attribute__((visibility("default"))) const manannan::PluginDescriptor* manannan_plugin_descriptor() { return &descriptor; }

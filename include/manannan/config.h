@@ -1,9 +1,11 @@
 #pragma once
+#include <yaml-cpp/yaml.h>
+
 #include <chrono>
 #include <filesystem>
 #include <string>
 #include <vector>
-#include <yaml-cpp/yaml.h>
+
 #include "manannan/loggers/logger.h"
 namespace manannan {
 struct Config {
@@ -17,4 +19,4 @@ struct Config {
 Config load_config(const std::filesystem::path& path);
 loggers::LogLevel parse_log_level(std::string value);
 YAML::Node resolve_yaml_root(const YAML::Node& document, const std::string& route);
-}
+}  // namespace manannan

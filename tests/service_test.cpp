@@ -3,6 +3,8 @@
 // published, and the loop runs on its cadence until SIGINT or SIGTERM,
 // leaving the caller's signal state as it found it.
 
+#include "manannan/service.h"
+
 #include <gtest/gtest.h>
 #include <signal.h>
 
@@ -14,7 +16,6 @@
 #include <vector>
 
 #include "fixtures/support.h"
-#include "manannan/service.h"
 
 namespace {
 using manannan::Service;
@@ -105,7 +106,7 @@ class ServiceRun : public ::testing::TestWithParam<int> {};
 TEST_P(ServiceRun, RunsOnItsCadenceUntilASignalAndRestoresSignalState) {
   sigset_t before;
   sigprocmask(SIG_SETMASK, nullptr, &before);
-  struct sigaction handler_before {};
+  struct sigaction handler_before{};
   sigaction(GetParam(), nullptr, &handler_before);
 
   auto logger = std::make_shared<RecordingLogger>();
@@ -127,7 +128,7 @@ TEST_P(ServiceRun, RunsOnItsCadenceUntilASignalAndRestoresSignalState) {
   sigprocmask(SIG_SETMASK, nullptr, &after);
   EXPECT_EQ(sigismember(&after, SIGTERM), sigismember(&before, SIGTERM));
   EXPECT_EQ(sigismember(&after, SIGINT), sigismember(&before, SIGINT));
-  struct sigaction handler_after {};
+  struct sigaction handler_after{};
   sigaction(GetParam(), nullptr, &handler_after);
   EXPECT_EQ(handler_after.sa_handler, handler_before.sa_handler);
 }

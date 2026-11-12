@@ -2,6 +2,8 @@
 // single-registry form and of duplicates, log level precedence, and dotted
 // plugin roots that never modify the document.
 
+#include "manannan/config.h"
+
 #include <gtest/gtest.h>
 
 #include <stdexcept>
@@ -9,7 +11,6 @@
 #include <vector>
 
 #include "fixtures/support.h"
-#include "manannan/config.h"
 
 namespace {
 using manannan::load_config;
@@ -20,8 +21,7 @@ using manannan::test::ScopedEnvironment;
 using manannan::test::work_directory;
 using manannan::test::write_file;
 
-const std::string header =
-    "manannan:\n  cadence: 5m\n  log_level: warn\n  source: test_source\n  plugin_directories: [/a, /b]\n";
+const std::string header = "manannan:\n  cadence: 5m\n  log_level: warn\n  source: test_source\n  plugin_directories: [/a, /b]\n";
 
 std::string error_loading(const std::string& text) {
   const auto path = write_file(work_directory("config") / "manannan.yaml", text);
@@ -55,8 +55,8 @@ TEST(Config, LoadsEverySetting) {
 
 TEST(Config, LogLevelDefaultsToInfo) {
   ScopedEnvironment level("LOG_LEVEL", std::nullopt);
-  const auto path = write_file(work_directory("config") / "manannan.yaml",
-                               "manannan:\n  cadence: 1s\n  source: s\n  plugin_directories: [.]\n  registries: [r]\n");
+  const auto path =
+      write_file(work_directory("config") / "manannan.yaml", "manannan:\n  cadence: 1s\n  source: s\n  plugin_directories: [.]\n  registries: [r]\n");
   EXPECT_EQ(load_config(path).log_level, manannan::loggers::INFO);
 }
 
@@ -82,8 +82,7 @@ TEST(Config, RefusesMissingOrMalformedSettings) {
   EXPECT_TRUE(contains(error_loading("manannan: 5\n"), "manannan configuration root"));
   EXPECT_TRUE(contains(error_loading("manannan:\n  cadence: 5x\n"), "unit"));
   EXPECT_TRUE(contains(error_loading("manannan:\n  cadence: 5m\n  plugin_directories: []\n"), "plugin directories"));
-  EXPECT_TRUE(contains(error_loading("manannan:\n  cadence: 5m\n  plugin_directories: [.]\n  source: [a]\n"),
-                       "manannan.source"));
+  EXPECT_TRUE(contains(error_loading("manannan:\n  cadence: 5m\n  plugin_directories: [.]\n  source: [a]\n"), "manannan.source"));
   EXPECT_TRUE(contains(error_loading(header + "  registry: first\n"), "manannan.registries"));
   EXPECT_TRUE(contains(error_loading(header), "at least one registry"));
   EXPECT_TRUE(contains(error_loading(header + "  registries: []\n"), "at least one registry"));
