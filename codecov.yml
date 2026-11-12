@@ -1,0 +1,13 @@
+# The daemon, its plugins and their headers, uploaded by .github/workflows/ci.yml.
+# Informational: coverage is reported, and does not fail a commit.
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
+ignore:
+  - tests/

@@ -1,0 +1,124 @@
+#
+# Manannan - plugin-based dynamic DNS updater
+#
+# Copyright (C) 2026 Tom Cully <mail@tomcully.com>
+# Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
+#
+# scripts/ci.sh on Debian trixie (release, sanitizer and coverage builds with
+# their tests, coverage to Codecov); a build and test with Clang; the Debian
+# package on arm64, as a Pi builds it, checked by lintian; and a build and test
+# on macOS. Every network request the tests make goes to a local server.
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    container:
+      image: debian:trixie
+      # LeakSanitizer needs ptrace to stop the process's threads.
+      options: --cap-add SYS_PTRACE --security-opt seccomp=unconfined
+    steps:
+      - name: Install packages
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential cmake git ca-certificates libyaml-cpp-dev libcurl4-openssl-dev libssl-dev \
+            libgtest-dev lcov \
+            curl gnupg  # Codecov's uploader verifies its own signature
+
+      - uses: actions/checkout@v4
+
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Build and test
+        run: sh scripts/ci.sh
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
+        with:
+          files: build-coverage/coverage.info
+          disable_search: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+  clang:
+    runs-on: ubuntu-24.04
+    container:
+      image: debian:trixie
+    steps:
+      - name: Install packages
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            clang cmake make git ca-certificates libyaml-cpp-dev libcurl4-openssl-dev libssl-dev libgtest-dev
+
+      - uses: actions/checkout@v4
+
+      - name: Build
+        env:
+          CXX: clang++
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMANANNAN_BUILD_TESTING=ON -DMANANNAN_WARNINGS_AS_ERRORS=ON
+          cmake --build build -j "$(nproc)"
+
+      - name: Test
+        run: build/tests/manannan_tests
+
+  # The package as a Pi builds it, on arm64: its tests run inside the build, and
+  # lintian fails it on any error or warning.
+  package:
+    runs-on: ubuntu-24.04-arm
+    container:
+      image: debian:trixie
+    steps:
+      - name: Install packages
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends dpkg-dev git ca-certificates lintian
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # tags, for the package's version
+
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Install build dependencies
+        run: apt-get build-dep -y ./
+
+      - name: Build
+        run: scripts/build-deb.sh
+
+      - name: Lint
+        run: lintian --fail-on error,warning build-deb/*.changes
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb
+          path: build-deb/*.deb
+
+  macos:
+    runs-on: macos-15
+    steps:
+      - name: Install packages
+        run: brew install yaml-cpp googletest openssl@3
+
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMANANNAN_BUILD_TESTING=ON -DMANANNAN_WARNINGS_AS_ERRORS=ON \
+            -DCMAKE_PREFIX_PATH="$(brew --prefix)" -DOPENSSL_ROOT_DIR="$(brew --prefix openssl@3)"
+          cmake --build build -j "$(sysctl -n hw.ncpu)"
+
+      - name: Test
+        run: build/tests/manannan_tests
