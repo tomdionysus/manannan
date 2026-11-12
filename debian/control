@@ -1,0 +1,47 @@
+Source: manannan
+Section: net
+Priority: optional
+Maintainer: tomdionysus <tomdionysus@users.noreply.github.com>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ libyaml-cpp-dev,
+ libcurl4-openssl-dev,
+ libssl-dev,
+ libgtest-dev <!nocheck>,
+Standards-Version: 4.7.0
+Homepage: https://github.com/tomdionysus/mannanan
+Vcs-Git: https://github.com/tomdionysus/mannanan.git
+Vcs-Browser: https://github.com/tomdionysus/mannanan
+Rules-Requires-Root: no
+
+Package: manannan
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+Recommends:
+ systemd,
+Description: plugin-based dynamic DNS updater
+ Manannan runs as a system service and, on a fixed cadence, reads a value
+ from a source plugin (typically the host's public IP address) and
+ reconciles it with every record held by one or more registry plugins
+ (typically DNS providers). Each record is checked and updated
+ independently.
+ .
+ Included plugins: amazon_check_ip (the public IPv4 address from
+ checkip.amazonaws.com) and aws_route53 (A records in AWS Route 53, across
+ any number of hosted zones and AWS accounts).
+ .
+ The service is installed disabled: configure /etc/manannan/manannan.yaml
+ and /etc/manannan/environment, then enable manannan.service.
+
+Package: manannan-dev
+Architecture: all
+Section: libdevel
+Depends:
+ ${misc:Depends},
+ libyaml-cpp-dev,
+Description: plugin-based dynamic DNS updater (plugin headers)
+ The headers for building Manannan source and registry plugins: the plugin
+ interfaces, the descriptor a plugin exports, and the logger it is given.
