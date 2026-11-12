@@ -1,8 +1,8 @@
 # Manannan
 
-[![CI](https://github.com/tomdionysus/mannanan/actions/workflows/ci.yml/badge.svg)](https://github.com/tomdionysus/mannanan/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/tomdionysus/mannanan/graph/badge.svg)](https://codecov.io/gh/tomdionysus/mannanan)
-[![CodeQL](https://github.com/tomdionysus/mannanan/actions/workflows/codeql.yml/badge.svg)](https://github.com/tomdionysus/mannanan/actions/workflows/codeql.yml)
+[![CI](https://github.com/tomdionysus/manannan/actions/workflows/ci.yml/badge.svg)](https://github.com/tomdionysus/manannan/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/tomdionysus/manannan/graph/badge.svg)](https://codecov.io/gh/tomdionysus/manannan)
+[![CodeQL](https://github.com/tomdionysus/manannan/actions/workflows/codeql.yml/badge.svg)](https://github.com/tomdionysus/manannan/actions/workflows/codeql.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 Manannan is a plugin-based dynamic DNS updater. It runs as a system service
@@ -81,8 +81,8 @@ EL line.
 ## Build and install
 
 ```sh
-git clone https://github.com/tomdionysus/mannanan.git
-cd mannanan
+git clone https://github.com/tomdionysus/manannan.git
+cd manannan
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMANANNAN_BUILD_TESTING=ON
 cmake --build build
 ./build/tests/manannan_tests
