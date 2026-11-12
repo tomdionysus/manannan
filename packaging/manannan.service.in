@@ -8,15 +8,40 @@ Type=simple
 ExecStart=@CMAKE_INSTALL_FULL_SBINDIR@/manannan @CMAKE_INSTALL_FULL_SYSCONFDIR@/manannan/manannan.yaml
 Restart=on-failure
 RestartSec=10s
+UMask=0077
+
+# The daemon only reads its configuration and plugins and makes outbound
+# HTTPS requests, so everything else is withheld.
 DynamicUser=yes
+PrivateUsers=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
 NoNewPrivileges=yes
-PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+DevicePolicy=closed
+PrivateIPC=yes
+ProtectProc=invisible
+ProcSubset=pid
+ProtectClock=yes
+ProtectHostname=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
+ProtectKernelLogs=yes
 ProtectControlGroups=yes
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+
 EnvironmentFile=-@CMAKE_INSTALL_FULL_SYSCONFDIR@/manannan/environment
 
 [Install]
