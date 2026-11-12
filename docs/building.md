@@ -133,6 +133,9 @@ UndefinedBehaviorSanitizer, and in a coverage build with an lcov report.
 `scripts/build-deb.sh` builds the Debian packages; see
 [packaging.md](packaging.md).
 
+`.clang-format` is authoritative: run `clang-format -i` on the files you
+change. CI fails any source that clang-format would change.
+
 The project also builds on macOS (`brew install cmake yaml-cpp googletest
 openssl`) for development; there is no service integration there.
 [PLUGINS.md](PLUGINS.md) describes the plugin contract.
