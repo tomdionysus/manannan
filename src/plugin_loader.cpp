@@ -48,10 +48,11 @@ void PluginLoader::scan(const std::vector<std::filesystem::path>& directories) {
       const auto* descriptor = get_descriptor();
       if (!descriptor || descriptor->abi_version != plugin_abi_version || !descriptor->name || !descriptor->yaml_root ||
           !descriptor->create || !descriptor->destroy) { logger_private->warn("invalid plugin: " + entry.path().string()); dlclose(library); continue; }
+      // The descriptor's strings live in the library: copy them before it is closed.
       const auto key = std::make_pair(descriptor->type, std::string(descriptor->name));
-      if (discovered_private.contains(key)) { dlclose(library); throw std::runtime_error("duplicate plugin: " + std::string(descriptor->name)); }
+      if (discovered_private.contains(key)) { dlclose(library); throw std::runtime_error("duplicate plugin: " + key.second); }
       discovered_private.emplace(key, entry.path());
-      logger_private->debug("discovered plugin " + std::string(descriptor->name));
+      logger_private->debug("discovered plugin " + key.second);
       dlclose(library);
     }
   }
