@@ -1,0 +1,21 @@
+#!/bin/sh
+#
+# Manannan - plugin-based dynamic DNS updater
+#
+# Copyright (C) 2026 Tom Cully <mail@tomcully.com>
+# Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
+#
+# manannan postrm: remove keeps the configuration and keys; purge deletes
+# them, as Debian expects of a purge.
+
+set -e
+
+case "$1" in
+    purge)
+        rm -rf /etc/manannan
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

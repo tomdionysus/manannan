@@ -1,0 +1,31 @@
+#!/bin/sh
+#
+# Manannan - plugin-based dynamic DNS updater
+#
+# Copyright (C) 2026 Tom Cully <mail@tomcully.com>
+# Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
+#
+# manannan postinst: the environment file that holds the provider's keys,
+# readable by root only (systemd reads it before the service drops to its
+# dynamic user). It is not a conffile: it is the site's, never the package's.
+
+set -e
+
+ENVIRONMENT=/etc/manannan/environment
+
+case "$1" in
+    configure)
+        if [ ! -e "$ENVIRONMENT" ]; then
+            (umask 077 && : >"$ENVIRONMENT")
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+if [ "$1" = "configure" ] && [ -z "${2:-}" ]; then
+    echo "manannan is installed and disabled. Set the records in /etc/manannan/manannan.yaml"
+    echo "and the keys in $ENVIRONMENT, then: systemctl enable --now manannan"
+fi
+
+exit 0

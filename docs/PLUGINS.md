@@ -11,8 +11,9 @@ Each plugin is a shared library (`.so`) in one of the directories listed under
 
 ## Contract
 
-Include `manannan/plugin.h` (installed to `/usr/local/include`) and implement
-one of these interfaces:
+Include `manannan/plugin.h` (in the `manannan-dev` package, or installed to
+`/usr/local/include` by a source install) and implement one of these
+interfaces:
 
 ```cpp
 class SourcePlugin : public Plugin {

@@ -1,0 +1,5 @@
+etc/manannan/manannan.yaml
+usr/lib/*/manannan/plugins/*.so
+usr/lib/systemd/system/manannan.service
+usr/sbin/manannan
+usr/share/man/man8/manannan.8

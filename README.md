@@ -1,5 +1,10 @@
 # Manannan
 
+[![CI](https://github.com/tomdionysus/mannanan/actions/workflows/ci.yml/badge.svg)](https://github.com/tomdionysus/mannanan/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/tomdionysus/mannanan/graph/badge.svg)](https://codecov.io/gh/tomdionysus/mannanan)
+[![CodeQL](https://github.com/tomdionysus/mannanan/actions/workflows/codeql.yml/badge.svg)](https://github.com/tomdionysus/mannanan/actions/workflows/codeql.yml)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+
 Manannan is a plugin-based dynamic DNS updater. It runs as a system service
 and, on a fixed cadence, reads a value from a **source** plugin (typically the
 host's public IP address) and reconciles it with every record held by one or
@@ -17,31 +22,56 @@ Bundled plugins:
 Other sources and registries are separate shared libraries; see
 [docs/PLUGINS.md](docs/PLUGINS.md).
 
+## Install the package
+
+On Debian trixie or Raspberry Pi OS (trixie, 64-bit), add the package
+repository and install:
+
+```sh
+sudo curl -fsSLo /etc/apt/sources.list.d/tomcully.sources https://tomcully.com/apt/tomcully.sources
+sudo apt update && sudo apt install manannan
+```
+
+The package installs the daemon to `/usr/sbin`, the plugins to
+`/usr/lib/<triplet>/manannan/plugins`, the configuration to `/etc/manannan` and
+the service disabled. Set the records in `/etc/manannan/manannan.yaml` and the
+keys in `/etc/manannan/environment` (see [Configuration](#configuration)), then
+`sudo systemctl enable --now manannan`. Updates arrive with `sudo apt upgrade`.
+`manannan-dev` has the headers for building plugins.
+
+A host that ran a source install under `/usr/local` should uninstall it first
+(see [Uninstalling](#uninstalling), keeping a copy of its configuration and
+environment file): the unit under `/usr/local/lib/systemd/system` would
+otherwise override the package's.
+
+To build from source instead, read on.
+
 ## Requirements
 
 - Linux with systemd. The package lists below cover Debian 12+, Ubuntu 22.04+,
   Raspberry Pi OS, Fedora, RHEL 9+ and its rebuilds, Arch and openSUSE
   Tumbleweed.
-- A C++20 compiler, CMake 3.20+, yaml-cpp 0.6+, libcurl and OpenSSL libcrypto.
+- A C++20 compiler, CMake 3.20+, yaml-cpp 0.6+, libcurl and OpenSSL libcrypto;
+  GoogleTest 1.12+ for the tests.
 
 ## Build dependencies
 
 ```sh
 # Debian, Ubuntu, Raspberry Pi OS
-sudo apt install build-essential cmake git libyaml-cpp-dev libcurl4-openssl-dev libssl-dev
+sudo apt install build-essential cmake git libyaml-cpp-dev libcurl4-openssl-dev libssl-dev libgtest-dev
 
 # Fedora
-sudo dnf install gcc-c++ make cmake git yaml-cpp-devel libcurl-devel openssl-devel
+sudo dnf install gcc-c++ make cmake git yaml-cpp-devel libcurl-devel openssl-devel gtest-devel
 
 # Rocky Linux, AlmaLinux (yaml-cpp comes from EPEL)
 sudo dnf install epel-release && sudo crb enable
-sudo dnf install gcc-c++ make cmake git yaml-cpp-devel libcurl-devel openssl-devel
+sudo dnf install gcc-c++ make cmake git yaml-cpp-devel libcurl-devel openssl-devel gtest-devel
 
 # Arch Linux
-sudo pacman -S --needed base-devel cmake git yaml-cpp curl openssl
+sudo pacman -S --needed base-devel cmake git yaml-cpp curl openssl gtest
 
 # openSUSE Tumbleweed
-sudo zypper install gcc-c++ make cmake git yaml-cpp-devel libcurl-devel libopenssl-devel
+sudo zypper install gcc-c++ make cmake git yaml-cpp-devel libcurl-devel libopenssl-devel gtest
 ```
 
 On RHEL itself, enable CodeReady Builder with `subscription-manager` and
@@ -53,11 +83,15 @@ EL line.
 ```sh
 git clone https://github.com/tomdionysus/mannanan.git
 cd mannanan
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMANANNAN_BUILD_TESTING=ON
 cmake --build build
-ctest --test-dir build
+./build/tests/manannan_tests
 sudo cmake --install build
 ```
+
+The tests need no network: every request they make goes to a server of their
+own on the loopback interface. Leave out `-DMANANNAN_BUILD_TESTING=ON` to build
+without GoogleTest.
 
 The default prefix is `/usr/local`; set `-DCMAKE_INSTALL_PREFIX` to change it.
 The installed configuration and unit file are generated with the actual install
@@ -66,6 +100,7 @@ paths, so they stay consistent under any prefix or libdir layout.
 | Installed | Path (default prefix) |
 | --- | --- |
 | Daemon | `/usr/local/sbin/manannan` |
+| Manual page | `/usr/local/share/man/man8/manannan.8` |
 | Plugins | `/usr/local/lib/manannan/plugins` (`lib64` on RPM-based distributions) |
 | Configuration | `/usr/local/etc/manannan/manannan.yaml` |
 | Environment file (you create it) | `/usr/local/etc/manannan/environment` |
@@ -164,6 +199,7 @@ it makes. Records that are already current are logged only at `debug`:
 [INFO ] loaded plugin amazon_check_ip
 [INFO ] loaded plugin aws_route53
 [INFO ] managing aws_route53:home.example.com
+[INFO ] Manannan 0.3.0 started
 [INFO ] set aws_route53:home.example.com to 203.0.113.7
 ```
 
@@ -205,7 +241,7 @@ To upgrade, `git pull`, rebuild, run the tests and reinstall as above, then
 | `ttl` | `60` | Default TTL in seconds |
 | `credentials` | `AWS_*` environment | `access_key_id`, `secret_access_key`, `session_token` |
 | `timeout_seconds` | `10` | |
-| `endpoint` | `route53.amazonaws.com` | |
+| `endpoint` | `route53.amazonaws.com` | Host name, optionally with a port and an `http://` or `https://` scheme (default `https`) |
 | `signing_region` | `us-east-1` | SigV4 signing region |
 
 Each record:
@@ -221,17 +257,32 @@ Each record:
 
 ```sh
 sudo systemctl disable --now manannan
-sudo rm /usr/local/sbin/manannan /usr/local/lib/systemd/system/manannan.service
+sudo rm /usr/local/sbin/manannan /usr/local/lib/systemd/system/manannan.service /usr/local/share/man/man8/manannan.8
 sudo rm -rf /usr/local/lib*/manannan /usr/local/include/manannan /usr/local/etc/manannan
 sudo systemctl daemon-reload
 ```
 
 The last `rm` also removes the configuration and the environment file.
 
+For a package install, `sudo apt purge manannan manannan-dev` removes
+everything, including `/etc/manannan`; `apt remove` keeps the configuration.
+
 ## Development
 
-The project also builds on macOS (`brew install cmake yaml-cpp curl openssl`)
-for development; there is no service integration there.
+| Option | Default | |
+| --- | --- | --- |
+| `MANANNAN_BUILD_TESTING` | `OFF` | Build `manannan_tests` (GoogleTest) |
+| `MANANNAN_WARNINGS_AS_ERRORS` | `OFF` | Treat compiler warnings as errors |
+| `MANANNAN_COVERAGE` | `OFF` | Instrument the daemon, plugins and tests for gcov |
+
+`scripts/ci.sh` is what CI runs on Debian trixie: the tests in a release
+build with warnings as errors, under AddressSanitizer and
+UndefinedBehaviorSanitizer, and in a coverage build with an lcov report.
+`scripts/build-deb.sh` builds the Debian packages; see
+[docs/packaging.md](docs/packaging.md).
+
+The project also builds on macOS (`brew install cmake yaml-cpp googletest
+openssl`) for development; there is no service integration there.
 [docs/PLUGINS.md](docs/PLUGINS.md) describes the plugin contract, and
 [docs/NAME.md](docs/NAME.md) the name.
 
