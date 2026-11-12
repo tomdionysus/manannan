@@ -26,7 +26,7 @@ namespace manannan::test {
 
 struct HttpRequest {
   std::string method;
-  std::string target;  // path and query, as sent
+  std::string target;                          // path and query, as sent
   std::map<std::string, std::string> headers;  // names in lower case
   std::string body;
 
@@ -110,8 +110,7 @@ class HttpServer {
   }
 
   static std::string lower(std::string value) {
-    std::transform(value.begin(), value.end(), value.begin(),
-                   [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
     return value;
   }
 
@@ -167,8 +166,8 @@ class HttpServer {
     }
 
     const auto response = handler_(request);
-    send_all(connection, "HTTP/1.1 " + std::to_string(response.status) + " Test\r\nContent-Length: " +
-                             std::to_string(response.body.size()) + "\r\nConnection: close\r\n\r\n" + response.body);
+    send_all(connection, "HTTP/1.1 " + std::to_string(response.status) + " Test\r\nContent-Length: " + std::to_string(response.body.size()) +
+                             "\r\nConnection: close\r\n\r\n" + response.body);
     {
       std::lock_guard lock(mutex_);
       requests_.push_back(std::move(request));

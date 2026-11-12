@@ -3,6 +3,8 @@
 // needs the plugin's configuration root, reports a factory's failure in full,
 // and unloads the library when the plugin is released.
 
+#include "manannan/plugin_loader.h"
+
 #include <gtest/gtest.h>
 
 #include <filesystem>
@@ -12,7 +14,6 @@
 #include <utility>
 
 #include "fixtures/support.h"
-#include "manannan/plugin_loader.h"
 
 namespace {
 using manannan::LoadedPlugin;
@@ -28,8 +29,7 @@ using manannan::test::write_file;
 const auto good = test_plugin_dir / "good";
 const auto registry_document = YAML::Load("registry:\n  test_registry:\n    records: [a, b]\n");
 
-std::string creation_error(const PluginLoader& loader, PluginType type, const std::string& name,
-                           const YAML::Node& document) {
+std::string creation_error(const PluginLoader& loader, PluginType type, const std::string& name, const YAML::Node& document) {
   try {
     (void)loader.create(type, name, document);
   } catch (const std::exception& error) {
@@ -91,8 +91,7 @@ TEST(PluginLoader, SkipsFilesThatAreNotPluginsOfThisAbi) {
   write_file(work / "garbage.so", "not a library");
   write_file(work / "notes.txt", "");
   std::filesystem::create_directory(work / "directory.so");
-  loader.scan({work, test_plugin_dir / "no_entrypoint", test_plugin_dir / "null_descriptor",
-               test_plugin_dir / "wrong_abi", test_plugin_dir / "no_create"});
+  loader.scan({work, test_plugin_dir / "no_entrypoint", test_plugin_dir / "null_descriptor", test_plugin_dir / "wrong_abi", test_plugin_dir / "no_create"});
   EXPECT_TRUE(logger->logged(manannan::loggers::WARN, "cannot inspect " + (work / "garbage.so").string()));
   EXPECT_EQ(logger->at(manannan::loggers::WARN).size(), 4u);  // garbage.so and three invalid descriptors
   EXPECT_TRUE(logger->logged(manannan::loggers::WARN, "invalid plugin: "));
@@ -113,30 +112,23 @@ TEST(PluginLoader, RefusesTwoPluginsOfOneKindAndName) {
 TEST(PluginLoader, NeedsThePluginsConfigurationRoot) {
   PluginLoader loader(std::make_shared<RecordingLogger>());
   loader.scan({good});
-  EXPECT_EQ(creation_error(loader, PluginType::registry, "test_registry", YAML::Load("source: {}\n")),
-            "plugin YAML root missing: registry.test_registry");
+  EXPECT_EQ(creation_error(loader, PluginType::registry, "test_registry", YAML::Load("source: {}\n")), "plugin YAML root missing: registry.test_registry");
 }
 
 TEST(PluginLoader, ReportsWhyAFactoryFailed) {
   PluginLoader loader(std::make_shared<RecordingLogger>());
   loader.scan({good});
-  const auto with = [](const std::string& mode) {
-    return YAML::Load("registry:\n  test_registry:\n    create: " + mode + "\n");
-  };
-  EXPECT_EQ(creation_error(loader, PluginType::registry, "test_registry", with("throw")),
-            "cannot create plugin test_registry: refused by configuration");
-  EXPECT_EQ(creation_error(loader, PluginType::registry, "test_registry", with("throw_int")),
-            "cannot create plugin test_registry: unknown exception");
-  EXPECT_EQ(creation_error(loader, PluginType::registry, "test_registry", with("null")),
-            "cannot create plugin test_registry: factory returned no object");
+  const auto with = [](const std::string& mode) { return YAML::Load("registry:\n  test_registry:\n    create: " + mode + "\n"); };
+  EXPECT_EQ(creation_error(loader, PluginType::registry, "test_registry", with("throw")), "cannot create plugin test_registry: refused by configuration");
+  EXPECT_EQ(creation_error(loader, PluginType::registry, "test_registry", with("throw_int")), "cannot create plugin test_registry: unknown exception");
+  EXPECT_EQ(creation_error(loader, PluginType::registry, "test_registry", with("null")), "cannot create plugin test_registry: factory returned no object");
 }
 
 TEST(PluginLoader, RechecksALibraryThatChangedAfterTheScan) {
   PluginLoader loader(std::make_shared<RecordingLogger>());
   loader.scan({good});
   ScopedEnvironment changed("MANANNAN_TEST_CHANGED", "1");
-  EXPECT_EQ(creation_error(loader, PluginType::registry, "test_registry", registry_document),
-            "plugin changed while loading: test_registry");
+  EXPECT_EQ(creation_error(loader, PluginType::registry, "test_registry", registry_document), "plugin changed while loading: test_registry");
 }
 
 TEST(PluginLoader, ReportsALibraryRemovedAfterTheScan) {
@@ -145,7 +137,6 @@ TEST(PluginLoader, ReportsALibraryRemovedAfterTheScan) {
   PluginLoader loader(std::make_shared<RecordingLogger>());
   loader.scan({work});
   std::filesystem::remove(work / "manannan_test_registry.so");
-  EXPECT_TRUE(contains(creation_error(loader, PluginType::registry, "test_registry", registry_document),
-                       "cannot load plugin test_registry: "));
+  EXPECT_TRUE(contains(creation_error(loader, PluginType::registry, "test_registry", registry_document), "cannot load plugin test_registry: "));
 }
 }  // namespace

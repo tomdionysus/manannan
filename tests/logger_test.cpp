@@ -34,9 +34,7 @@ class CapturedStreams {
   std::streambuf* err_;
 };
 
-TEST(Logger, ZuluTimeIsIso8601Utc) {
-  EXPECT_TRUE(std::regex_match(manannan::get_zulu_time(), std::regex(R"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ)")));
-}
+TEST(Logger, ZuluTimeIsIso8601Utc) { EXPECT_TRUE(std::regex_match(manannan::get_zulu_time(), std::regex(R"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ)"))); }
 
 TEST(Logger, StdioWritesEachLevelAtOrAboveItsThreshold) {
   CapturedStreams streams;

@@ -28,8 +28,7 @@ std::string sha256(const std::string& value) {
 std::vector<unsigned char> hmac(const std::vector<unsigned char>& key, const std::string& value) {
   unsigned char digest[EVP_MAX_MD_SIZE];
   unsigned int size = 0;
-  HMAC(EVP_sha256(), key.data(), static_cast<int>(key.size()), reinterpret_cast<const unsigned char*>(value.data()),
-       value.size(), digest, &size);
+  HMAC(EVP_sha256(), key.data(), static_cast<int>(key.size()), reinterpret_cast<const unsigned char*>(value.data()), value.size(), digest, &size);
   return {digest, digest + size};
 }
 
@@ -55,9 +54,8 @@ std::string url_encode(const std::string& value) {
   return out.str();
 }
 
-SignedRequest sign_v4(const std::string& method, const std::string& host, const std::string& path, const std::string& query,
-                      const std::string& payload, const Credentials& credentials, const std::string& region,
-                      const std::string& service, std::chrono::system_clock::time_point now) {
+SignedRequest sign_v4(const std::string& method, const std::string& host, const std::string& path, const std::string& query, const std::string& payload,
+                      const Credentials& credentials, const std::string& region, const std::string& service, std::chrono::system_clock::time_point now) {
   const auto date_time = format_utc(now, "%Y%m%dT%H%M%SZ");
   const auto date = format_utc(now, "%Y%m%d");
   const auto payload_hash = sha256(payload);

@@ -61,13 +61,11 @@ class Route53 : public ::testing::Test {
 };
 
 TEST_F(Route53, ManagesRecordsAcrossZonesWithNormalisedNames) {
-  EXPECT_EQ(records(base_credentials +
-                    "    records:\n"
-                    "      - {name: Macnessa.Macha.Network., hosted_zone_id: /hostedzone/Z111}\n"
-                    "      - {name: gbni.athenasip.org, hosted_zone_id: Z222, ttl: 300}\n"),
+  EXPECT_EQ(records(base_credentials + "    records:\n"
+                                       "      - {name: Macnessa.Macha.Network., hosted_zone_id: /hostedzone/Z111}\n"
+                                       "      - {name: gbni.athenasip.org, hosted_zone_id: Z222, ttl: 300}\n"),
             (std::vector<std::string>{"macnessa.macha.network", "gbni.athenasip.org"}));
-  EXPECT_TRUE(logger->logged(manannan::loggers::DEBUG,
-                             "record macnessa.macha.network in zone Z111 with TTL 60 using the base credentials"));
+  EXPECT_TRUE(logger->logged(manannan::loggers::DEBUG, "record macnessa.macha.network in zone Z111 with TTL 60 using the base credentials"));
   EXPECT_TRUE(logger->logged(manannan::loggers::DEBUG, "record gbni.athenasip.org in zone Z222 with TTL 300"));
 }
 
@@ -92,11 +90,10 @@ TEST_F(Route53, BaseCredentialsFallBackToTheEnvironment) {
 }
 
 TEST_F(Route53, PerRecordCredentialsNeverBorrowFromTheBase) {
-  EXPECT_TRUE(contains(error(base_credentials +
-                             "    records:\n"
-                             "      - name: a.example.com\n"
-                             "        hosted_zone_id: Z1\n"
-                             "        credentials: {access_key_id: AKIDOWN}\n"),
+  EXPECT_TRUE(contains(error(base_credentials + "    records:\n"
+                                                "      - name: a.example.com\n"
+                                                "        hosted_zone_id: Z1\n"
+                                                "        credentials: {access_key_id: AKIDOWN}\n"),
                        "credentials need access_key_id and secret_access_key"));
 }
 
@@ -176,15 +173,14 @@ class Route53Requests : public Route53 {
 };
 
 std::string record_set(const std::string& name, const std::string& type, const std::string& value) {
-  return "<ResourceRecordSet><Name>" + name + "</Name><Type>" + type +
-         "</Type><TTL>60</TTL><ResourceRecords><ResourceRecord><Value>" + value +
+  return "<ResourceRecordSet><Name>" + name + "</Name><Type>" + type + "</Type><TTL>60</TTL><ResourceRecords><ResourceRecord><Value>" + value +
          "</Value></ResourceRecord></ResourceRecords></ResourceRecordSet>";
 }
 
 TEST_F(Route53Requests, ReadsTheARecordAmongOtherSets) {
   list_body = "<ListResourceRecordSetsResponse><ResourceRecordSets>" + record_set("a.example.co.", "A", "192.0.2.9") +
-              record_set("a.example.com.", "TXT", "&quot;text&quot;") +
-              record_set("A.Example.Com.", "A", "192.0.2.1&amp;lt;") + "</ResourceRecordSets></ListResourceRecordSetsResponse>";
+              record_set("a.example.com.", "TXT", "&quot;text&quot;") + record_set("A.Example.Com.", "A", "192.0.2.1&amp;lt;") +
+              "</ResourceRecordSets></ListResourceRecordSetsResponse>";
   EXPECT_EQ(registry().get_value("a.example.com"), "192.0.2.1&lt;");
 
   const auto requests = server.requests();
@@ -235,9 +231,7 @@ TEST_F(Route53Requests, UpsertsTheRecordWithItsTtl) {
 
 TEST_F(Route53Requests, SendsTheSessionToken) {
   list_body = record_set("a.example.com.", "A", "192.0.2.1");
-  EXPECT_EQ(registry("", "    credentials: {access_key_id: AKIDTMP, secret_access_key: tmp, session_token: TOKEN}\n")
-                .get_value("a.example.com"),
-            "192.0.2.1");
+  EXPECT_EQ(registry("", "    credentials: {access_key_id: AKIDTMP, secret_access_key: tmp, session_token: TOKEN}\n").get_value("a.example.com"), "192.0.2.1");
   const auto request = server.requests().at(0);
   EXPECT_EQ(request.header("x-amz-security-token"), "TOKEN");
   EXPECT_TRUE(contains(request.header("authorization"), "Credential=AKIDTMP/"));
@@ -279,9 +273,9 @@ TEST_F(Route53, ReportsAnUnreachableEndpoint) {
 }
 
 TEST_F(Route53, AcceptsAnHttpsEndpointWithAPort) {
-  EXPECT_EQ(records("    endpoint: https://route53.example.test:8443/\n" + base_credentials +
-                    "    records:\n      - {name: a.example.com, hosted_zone_id: Z1}\n")
-                .size(),
-            1u);
+  EXPECT_EQ(
+      records("    endpoint: https://route53.example.test:8443/\n" + base_credentials + "    records:\n      - {name: a.example.com, hosted_zone_id: Z1}\n")
+          .size(),
+      1u);
 }
 }  // namespace

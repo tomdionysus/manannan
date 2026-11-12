@@ -9,8 +9,7 @@
 #include "manannan/version.h"
 
 namespace manannan {
-int run_application(const std::vector<std::string>& arguments, std::shared_ptr<loggers::Logger> logger, std::ostream& out,
-                    std::ostream& err) {
+int run_application(const std::vector<std::string>& arguments, std::shared_ptr<loggers::Logger> logger, std::ostream& out, std::ostream& err) {
   if (arguments.size() == 1 && arguments[0] == "--version") {
     out << "manannan " << version << "\n";
     return 0;

@@ -1,11 +1,11 @@
 #pragma once
 
+#include <yaml-cpp/yaml.h>
+
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
-
-#include <yaml-cpp/yaml.h>
 
 #include "manannan/loggers/logger.h"
 

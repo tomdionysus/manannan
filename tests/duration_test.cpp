@@ -1,11 +1,11 @@
 // Cadence parsing: an integer and one of ms, s, m or h, positive and small
 // enough to add to a steady_clock time point.
 
+#include "manannan/duration.h"
+
 #include <gtest/gtest.h>
 
 #include <stdexcept>
-
-#include "manannan/duration.h"
 
 namespace {
 using namespace std::chrono_literals;
@@ -19,8 +19,7 @@ TEST(Duration, ParsesEachUnit) {
 }
 
 TEST(Duration, RefusesMalformedValues) {
-  for (const auto* value : {"", "5", "m", "-5m", "5d", "5 m", "0s"})
-    EXPECT_THROW((void)parse_duration(value), std::invalid_argument) << value;
+  for (const auto* value : {"", "5", "m", "-5m", "5d", "5 m", "0s"}) EXPECT_THROW((void)parse_duration(value), std::invalid_argument) << value;
 }
 
 TEST(Duration, RefusesValuesTheClockCannotHold) {
