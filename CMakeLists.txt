@@ -1,13 +1,20 @@
 cmake_minimum_required(VERSION 3.20)
-project(Manannan VERSION 0.2.0 LANGUAGES CXX)
+project(Manannan VERSION 0.3.0 LANGUAGES CXX)
 
 include(GNUInstallDirs)
-include(CTest)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
+option(MANANNAN_BUILD_TESTING "Build manannan_tests (GoogleTest)" OFF)
+option(MANANNAN_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
+option(MANANNAN_COVERAGE "Instrument the daemon, plugins and tests for gcov" OFF)
 
 find_package(yaml-cpp 0.6 CONFIG REQUIRED)
 # yaml-cpp before 0.8 exports its target without the yaml-cpp:: namespace.
@@ -21,36 +28,53 @@ if(NOT TARGET yaml-cpp::yaml-cpp)
   endif()
 endif()
 
+add_library(manannan_warnings INTERFACE)
+target_compile_options(manannan_warnings INTERFACE -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wno-sign-conversion)
+if(MANANNAN_WARNINGS_AS_ERRORS)
+  target_compile_options(manannan_warnings INTERFACE -Werror)
+endif()
+if(MANANNAN_COVERAGE)
+  target_compile_options(manannan_warnings INTERFACE --coverage -O0 -g)
+  target_link_options(manannan_warnings INTERFACE --coverage)
+endif()
+
+configure_file(include/manannan/version.h.in ${PROJECT_BINARY_DIR}/generated/manannan/version.h @ONLY)
+
 add_library(manannan_api INTERFACE)
 target_include_directories(manannan_api INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/generated>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_link_libraries(manannan_api INTERFACE yaml-cpp::yaml-cpp)
 
-add_library(manannan_logging STATIC
-  src/loggers/logger_scoped.cpp
-  src/loggers/logger_stdio.cpp
-  src/util.cpp)
-target_link_libraries(manannan_logging PUBLIC manannan_api)
-
-add_executable(manannan
-  src/main.cpp
+# Everything but main(), so the tests drive the same code the daemon runs.
+add_library(manannan_core STATIC
+  src/application.cpp
   src/config.cpp
   src/duration.cpp
+  src/loggers/logger_scoped.cpp
+  src/loggers/logger_stdio.cpp
   src/plugin_loader.cpp
-  src/service.cpp)
-target_link_libraries(manannan PRIVATE manannan_logging ${CMAKE_DL_LIBS})
+  src/service.cpp
+  src/util.cpp)
+target_link_libraries(manannan_core PUBLIC manannan_api ${CMAKE_DL_LIBS} PRIVATE manannan_warnings)
+
+add_executable(manannan src/main.cpp)
+target_link_libraries(manannan PRIVATE manannan_core manannan_warnings)
 
 # Plugins install here; the generated configuration and unit file refer to the
 # same install directories so they agree on every prefix and libdir layout.
 set(MANANNAN_PLUGIN_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR}/manannan/plugins)
 set(MANANNAN_PLUGIN_DIR ${CMAKE_INSTALL_FULL_LIBDIR}/manannan/plugins)
 configure_file(config/manannan.yaml.in manannan.yaml @ONLY)
+configure_file(man/manannan.8.in manannan.8 @ONLY)
 
 add_subdirectory(plugins)
 
 install(TARGETS manannan RUNTIME DESTINATION ${CMAKE_INSTALL_SBINDIR})
-install(DIRECTORY include/manannan DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/manannan.8 DESTINATION ${CMAKE_INSTALL_MANDIR}/man8)
+install(DIRECTORY include/manannan DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} PATTERN "*.in" EXCLUDE)
+install(FILES ${PROJECT_BINARY_DIR}/generated/manannan/version.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/manannan)
 # Never overwrite an existing configuration: it holds the site's records and
 # credentials. The template is installed only on a fresh install.
 install(CODE "
@@ -68,17 +92,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   install(FILES ${CMAKE_CURRENT_BINARY_DIR}/manannan.service DESTINATION lib/systemd/system)
 endif()
 
-if(BUILD_TESTING)
-  add_executable(manannan_tests
-    tests/test_main.cpp
-    src/config.cpp
-    src/duration.cpp
-    src/plugin_loader.cpp
-    src/service.cpp)
-  target_link_libraries(manannan_tests PRIVATE manannan_logging ${CMAKE_DL_LIBS})
-  target_compile_definitions(manannan_tests PRIVATE
-    MANANNAN_TEST_ROUTE53_DIR="$<TARGET_FILE_DIR:manannan_registry_aws_route53>")
-  add_dependencies(manannan_tests manannan_registry_aws_route53)
-  add_test(NAME manannan_tests COMMAND manannan_tests)
+if(MANANNAN_BUILD_TESTING)
+  find_package(GTest 1.12 CONFIG REQUIRED)
+  add_subdirectory(tests)
 endif()
-

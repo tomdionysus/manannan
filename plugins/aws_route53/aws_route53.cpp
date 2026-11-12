@@ -1,5 +1,6 @@
 #include <curl/curl.h>
 #include <algorithm>
+#include <chrono>
 #include <cctype>
 #include <cstdlib>
 #include <initializer_list>
@@ -12,6 +13,7 @@
 
 #include "aws_sigv4.h"
 #include "manannan/plugin.h"
+#include "manannan/version.h"
 
 namespace {
 
@@ -157,11 +159,23 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
       throw std::runtime_error(where + ": set hosted_zone_id and name on each entry in 'records'");
     check_keys(config, where, {"endpoint", "signing_region", "timeout_seconds", "ttl", "credentials", "records"});
 
-    host_private = config["endpoint"].as<std::string>("route53.amazonaws.com");
+    // The endpoint is a host name, optionally with a port and an http:// or
+    // https:// scheme (https when none is given).
+    host_private = scalar(config, "endpoint", where, false);
+    if (host_private.empty()) host_private = "route53.amazonaws.com";
+    if (host_private.starts_with("https://")) {
+      host_private.erase(0, 8);
+    } else if (host_private.starts_with("http://")) {
+      scheme_private = "http";
+      host_private.erase(0, 7);
+    }
+    while (host_private.ends_with('/')) host_private.pop_back();
+    if (host_private.empty() || host_private.find_first_of("/?#@ ") != std::string::npos)
+      throw std::runtime_error(where + ": 'endpoint' must be a host name, optionally with a scheme and port");
     region_private = config["signing_region"].as<std::string>("us-east-1");
     timeout_private = config["timeout_seconds"].as<long>(10);
-    if (host_private.empty() || region_private.empty() || timeout_private <= 0)
-      throw std::runtime_error(where + ": endpoint, signing_region and timeout_seconds must be set");
+    if (region_private.empty() || timeout_private <= 0)
+      throw std::runtime_error(where + ": signing_region must be set and timeout_seconds must be positive");
     const auto default_ttl = read_ttl(config, 60, where);
     const auto base_credentials = read_credentials(config["credentials"], where, true);
 
@@ -199,7 +213,8 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
                             (entry["credentials"] ? " using its own credentials" : " using the base credentials"));
       records_private.push_back(std::move(record));
     }
-    if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) throw std::runtime_error("cannot initialise libcurl");
+    if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK)
+      throw std::runtime_error("cannot initialise libcurl");  // LCOV_EXCL_LINE
   }
 
   ~AwsRoute53() override {
@@ -272,12 +287,13 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
 
   std::string request(const Record& record, const std::string& method, const std::string& path,
                       const std::string& query, const std::string& payload) const {
-    logger_private->debug(method + " https://" + host_private + path);
-    const auto signed_request = manannan::aws::sign_v4(
-        method, host_private, path, query, payload, record.credentials, region_private, "route53");
-    const auto url = "https://" + host_private + path + (query.empty() ? "" : "?" + query);
+    const auto base = scheme_private + "://" + host_private + path;
+    logger_private->debug(method + " " + base);
+    const auto signed_request = manannan::aws::sign_v4(method, host_private, path, query, payload, record.credentials,
+                                                       region_private, "route53", std::chrono::system_clock::now());
+    const auto url = base + (query.empty() ? "" : "?" + query);
     std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> curl(curl_easy_init(), curl_easy_cleanup);
-    if (!curl) throw std::runtime_error("cannot initialise HTTP client");
+    if (!curl) throw std::runtime_error("cannot initialise HTTP client");  // LCOV_EXCL_LINE
 
     curl_slist* raw_headers = nullptr;
     const std::vector<std::string> values{
@@ -296,7 +312,7 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
     curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, append_data);
     curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &response);
     curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT, timeout_private);
-    curl_easy_setopt(curl.get(), CURLOPT_USERAGENT, "Manannan/0.2");
+    curl_easy_setopt(curl.get(), CURLOPT_USERAGENT, user_agent.c_str());
     if (method == "POST") {
       curl_easy_setopt(curl.get(), CURLOPT_POST, 1L);
       curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDS, payload.c_str());
@@ -312,6 +328,8 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
     return response;
   }
 
+  const std::string user_agent = std::string("Manannan/") + manannan::version;
+  std::string scheme_private = "https";
   std::string host_private;
   std::string region_private;
   long timeout_private{};

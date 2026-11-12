@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <string>
 #include "manannan/plugin.h"
+#include "manannan/version.h"
 namespace {
 std::size_t append_data(char* data, std::size_t size, std::size_t count, void* target) {
   static_cast<std::string*>(target)->append(data, size * count); return size * count;
@@ -20,7 +21,8 @@ class AmazonCheckIp final : public manannan::SourcePlugin {
         timeout_private(config["timeout_seconds"].as<long>(10)), logger_private(std::move(logger)) {
     if (timeout_private <= 0) throw std::runtime_error("timeout_seconds must be positive");
     logger_private->debug("initialising Amazon Check IP source");
-    if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) throw std::runtime_error("cannot initialise libcurl");
+    if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK)
+      throw std::runtime_error("cannot initialise libcurl");  // LCOV_EXCL_LINE
   }
   ~AmazonCheckIp() override {
     logger_private->debug("destroy()");
@@ -30,13 +32,13 @@ class AmazonCheckIp final : public manannan::SourcePlugin {
     logger_private->debug("get_value()");
     logger_private->debug("requesting public IP from " + endpoint_private);
     std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> curl(curl_easy_init(), curl_easy_cleanup);
-    if (!curl) throw std::runtime_error("cannot initialise HTTP client");
+    if (!curl) throw std::runtime_error("cannot initialise HTTP client");  // LCOV_EXCL_LINE
     std::string response;
     curl_easy_setopt(curl.get(), CURLOPT_URL, endpoint_private.c_str());
     curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, append_data);
     curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &response);
     curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT, timeout_private);
-    curl_easy_setopt(curl.get(), CURLOPT_USERAGENT, "Manannan/0.2");
+    curl_easy_setopt(curl.get(), CURLOPT_USERAGENT, user_agent.c_str());
     const auto result = curl_easy_perform(curl.get());
     long status = 0; curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &status);
     if (result != CURLE_OK) throw std::runtime_error(std::string("check IP request failed: ") + curl_easy_strerror(result));
@@ -48,6 +50,7 @@ class AmazonCheckIp final : public manannan::SourcePlugin {
     return response;
   }
  private:
+  const std::string user_agent = std::string("Manannan/") + manannan::version;
   std::string endpoint_private;
   long timeout_private;
   std::shared_ptr<manannan::loggers::Logger> logger_private;
