@@ -89,7 +89,7 @@ class HttpServer {
     return requests_;
   }
 
-  // Waits until at least count requests have been answered.
+  // Waits until at least count requests have been received.
   bool wait_for(std::size_t count, std::chrono::milliseconds deadline = std::chrono::seconds(10)) const {
     std::unique_lock lock(mutex_);
     return answered_.wait_for(lock, deadline, [&] { return requests_.size() >= count; });
@@ -166,13 +166,14 @@ class HttpServer {
     }
 
     const auto response = handler_(request);
-    send_all(connection, "HTTP/1.1 " + std::to_string(response.status) + " Test\r\nContent-Length: " + std::to_string(response.body.size()) +
-                             "\r\nConnection: close\r\n\r\n" + response.body);
+    // Record before replying: once the client has its answer, requests() must show the request.
     {
       std::lock_guard lock(mutex_);
       requests_.push_back(std::move(request));
     }
     answered_.notify_all();
+    send_all(connection, "HTTP/1.1 " + std::to_string(response.status) + " Test\r\nContent-Length: " + std::to_string(response.body.size()) +
+                             "\r\nConnection: close\r\n\r\n" + response.body);
   }
 
   Handler handler_;
