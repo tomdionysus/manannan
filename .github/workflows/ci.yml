@@ -34,7 +34,7 @@ jobs:
             libgtest-dev lcov \
             curl gnupg  # Codecov's uploader verifies its own signature
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Trust the checkout
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -61,7 +61,7 @@ jobs:
           apt-get install -y --no-install-recommends \
             clang cmake make git ca-certificates libyaml-cpp-dev libcurl4-openssl-dev libssl-dev libgtest-dev
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build
         env:
@@ -85,7 +85,7 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends dpkg-dev git ca-certificates lintian
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0  # tags, for the package's version
 
@@ -112,7 +112,7 @@ jobs:
       - name: Install packages
         run: brew install yaml-cpp googletest openssl@3
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build
         run: |
