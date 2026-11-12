@@ -4,7 +4,7 @@
 # Copyright (C) 2026 Tom Cully <mail@tomcully.com>
 # Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
 #
-# scripts/ci.sh on Debian trixie (release, sanitizer and coverage builds with
+# A clang-format check; scripts/ci.sh on Debian trixie (release, sanitizer and coverage builds with
 # their tests, coverage to Codecov); a build and test with Clang; the Debian
 # package on arm64, as a Pi builds it, checked by lintian; and a build and test
 # on macOS. Every network request the tests make goes to a local server.
@@ -19,6 +19,25 @@ permissions:
   contents: read
 
 jobs:
+  # The sources must be as .clang-format leaves them.
+  format:
+    runs-on: ubuntu-24.04
+    container:
+      image: debian:trixie
+    steps:
+      - name: Install packages
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends clang-format git ca-certificates
+
+      - uses: actions/checkout@v7
+
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Check formatting
+        run: git ls-files -z '*.cpp' '*.h' | xargs -0 clang-format --dry-run --Werror
+
   linux:
     runs-on: ubuntu-24.04
     container:
