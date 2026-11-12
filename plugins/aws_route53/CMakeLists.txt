@@ -1,7 +1,10 @@
 find_package(CURL REQUIRED)
 find_package(OpenSSL REQUIRED)
-add_library(manannan_registry_aws_route53 MODULE aws_route53.cpp aws_sigv4.cpp)
-target_link_libraries(manannan_registry_aws_route53 PRIVATE manannan_api CURL::libcurl OpenSSL::Crypto)
+# Signing is a library of its own so the tests can check it against fixed times.
+add_library(manannan_aws_sigv4 STATIC aws_sigv4.cpp)
+target_include_directories(manannan_aws_sigv4 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(manannan_aws_sigv4 PUBLIC OpenSSL::Crypto PRIVATE manannan_warnings)
+add_library(manannan_registry_aws_route53 MODULE aws_route53.cpp)
+target_link_libraries(manannan_registry_aws_route53 PRIVATE manannan_api manannan_warnings manannan_aws_sigv4 CURL::libcurl)
 set_target_properties(manannan_registry_aws_route53 PROPERTIES PREFIX "" OUTPUT_NAME "manannan_registry_aws_route53")
 install(TARGETS manannan_registry_aws_route53 LIBRARY DESTINATION ${MANANNAN_PLUGIN_INSTALL_DIR})
-
