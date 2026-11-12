@@ -65,7 +65,7 @@ paths, so they stay consistent under any prefix or libdir layout.
 
 Reinstalling never overwrites an existing `manannan.yaml`.
 
-Configure as in the [README](../README.md#configuration), using these paths.
+Configure as in [configuration.md](configuration.md), using these paths.
 The keys file is not created for you; make it root-only:
 
 ```sh
