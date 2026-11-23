@@ -3,6 +3,26 @@
 Newest first. Each entry: what landed, the commit, and its gate counts (tests
 run and passed, sanitizers run). Each session leaves a handoff here.
 
+## Alignment step 1: identifying data out of the tree and history, 2026-11-23
+
+- The Route 53 tests used real record names; they now use example names.
+  History was rewritten with git filter-repo (replace-text, four literal
+  rules) so no commit carries them. The fix commit itself became empty in the
+  rewrite and was dropped: the example names now appear from 0.2.0 on.
+- Old to new hashes for every commit after 5017703: bdd0ef7 to 4e5730c
+  (0.2.0), a22f943 to 9bb4a00, 5ace290 to 6de3749, ec54047 to 874bba2,
+  7e19c9b to 9c7ae6d, 4ba2bc0 to 8d041e7 (the published 0.3.0 packages),
+  f0e0af2 to 258e6b8 (0.3.0), 25893bc to c86a41c, 8c73c4d to d19ffa3,
+  31b1817 to 86ce71c, 8e78138 to 14492e1, dfc5518 to 65ad724, 2cf037f to
+  fe11517. The full map and a bundle of every ref before the rewrite are in
+  build/history-rewrite/ (untracked).
+- Tags v0.2.0 and v0.3.0 follow the rewritten commits; bare 0.2.0 and 0.3.0
+  added beside them. The stale dependabot branch deleted locally.
+- Not yet pushed: main and all tags need a force-push on the owner's word.
+  GitHub keeps refs/pull/1-4/head and their objects; only GitHub support can
+  purge them.
+- Gates: release build with -Werror on a claimed Pi, 59 tests run, 59 passed.
+
 ## Handoff, 2026-11-23: plan brought to the group template
 
 - TODO/ACTIVE.md and this file rewritten to the group templates: dated
@@ -12,35 +32,35 @@ run and passed, sanitizers run). Each session leaves a handoff here.
 - Asked the coordinating session for anything Manannan's plan should carry:
   nothing specific, only the standing cluster rules now in the plan.
 
-## Docs, format and CI, 2026-11-12 (8c73c4d to 8e78138, plan dfc5518)
+## Docs, format and CI, 2026-11-12 (d19ffa3 to 14492e1, plan 65ad724)
 
-- clang-format (stack dialect, Google 160) applied to the tree (25893bc) and
-  checked in CI (8c73c4d). Fixed a race in the test HTTP server that CI's
-  coverage build hit (31b1817).
+- clang-format (stack dialect, Google 160) applied to the tree (c86a41c) and
+  checked in CI (d19ffa3). Fixed a race in the test HTTP server that CI's
+  coverage build hit (86ce71c).
 - README cut down to install and set-up; configuration, running, building and
-  packaging split into docs/ (f0e0af2, 8e78138). Plan, record and release
-  steps added (dfc5518).
+  packaging split into docs/ (258e6b8, 14492e1). Plan, record and release
+  steps added (65ad724).
 - Gates: CI green on main (format, linux with -Werror, ASan+UBSan and
   coverage, clang, arm64 package with lintian, macOS); 59 tests passing.
 
-## 0.3.0: tests, CI, packaging, hardening, 2026-11-12 to 2026-11-13 (tag v0.3.0, packages from 4ba2bc0)
+## 0.3.0: tests, CI, packaging, hardening, 2026-11-12 to 2026-11-13 (tags 0.3.0 and v0.3.0, packages from 8d041e7, 4ba2bc0 before the history rewrite)
 
-- Fixed a use after dlclose in duplicate plugin detection (a22f943).
+- Fixed a use after dlclose in duplicate plugin detection (9bb4a00).
 - Hardened the systemd unit: no capabilities, private users, devices and IPC,
   hidden /proc, syscall filter @system-service minus @privileged and
-  @resources, W^X. systemd-analyze security 7.0 MEDIUM to 1.1 OK (5ace290).
+  @resources, W^X. systemd-analyze security 7.0 MEDIUM to 1.1 OK (6de3749).
 - GoogleTest suite over a manannan_core library: config, duration, loggers,
   the plugin loader against purpose-built bad plugins, the service loop with
   real signals, the application entry point and the daemon binary, checkip
   and Route 53 against a loopback HTTP server, SigV4 against vectors computed
   independently. `--version`, a generated version header,
   `Manannan/<version>` user agent, a manannan(8) page, http:// or https:// on
-  the Route 53 endpoint (ec54047).
-- GitHub CI, Codecov, CodeQL, Dependabot (7e19c9b); all four initial
+  the Route 53 endpoint (874bba2).
+- GitHub CI, Codecov, CodeQL, Dependabot (9c7ae6d); all four initial
   Dependabot bumps merged.
 - Debian packaging (manannan, manannan-dev, manannan-dbgsym) built by
   scripts/build-deb.sh with the version from git describe; postinst creates a
-  root-only environment file; purge removes /etc/manannan (4ba2bc0).
+  root-only environment file; purge removes /etc/manannan (8d041e7).
 - Published 0.3.0 in the apt repository, built from the tag on a trixie arm64
   Pi. Both production nodes moved from /usr/local source installs to the
   package, with a full cycle checked at debug on each.
@@ -48,7 +68,7 @@ run and passed, sanitizers run). Each session leaves a handoff here.
 - Gates: 59 tests run, 59 passed, in the package build and in CI; ASan+UBSan
   clean in CI; line coverage above 99%; lintian clean.
 
-## 0.2.0: multiple records, 2026-11-01 (bdd0ef7, tag v0.2.0)
+## 0.2.0: multiple records, 2026-11-01 (4e5730c, tags 0.2.0 and v0.2.0)
 
 - Registries manage any number of records (plugin ABI 2); each record is
   reconciled independently. aws_route53 takes a records list with per-record
