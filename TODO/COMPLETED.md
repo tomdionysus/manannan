@@ -3,6 +3,29 @@
 Newest first. Each entry: what landed, the commit, and its gate counts (tests
 run and passed, sanitizers run). Each session leaves a handoff here.
 
+## Alignment steps 2 to 6, 2026-11-23 (develop 922269a to dd825c0)
+
+- develop created from main. Each step a feature branch squashed onto it.
+- Layout (922269a): the plugin interface under manannan/include (all that
+  manannan-dev now installs: plugin.h, loggers/logger.h, version.h), the
+  daemon in manannan/daemon (namespace manannan::daemon), the loggers in
+  manannan/loggers, the tests in manannan/test named by subsystem;
+  executables at the top of the build tree.
+- Private members `_name` (b44540a), test fixtures included.
+- Header block on every source, CMake file, script and YAML file; CMake
+  3.24 (Ubuntu 22.04 leaves the source-build list); -Wthread-safety under
+  clang (49130f0).
+- tools/ci.sh with the group's steps and a fuzz step; the template
+  workflow with concurrency and paths-ignore, x86-64 and arm64 jobs, deb on
+  both; CodeQL on main and weekly; codecov.yml ignores; release badge; bare
+  tags in tools/build-deb.sh; a package consumer (manannan/test/package)
+  that builds a plugin against the installed headers (dd825c0).
+- Gates on a claimed Pi: release (g++) and clang-19 builds with -Werror, 59
+  tests run, 59 passed, each step; tools/ci.sh check (seen red on a missing
+  header first), release, clang, tidy, asan (59 passed), package (consumer
+  OK), coverage 99.2% of lines (636 of 641), 97.7% of functions (85 of 87).
+  The fuzz step waits on step 10; tsan runs at the release gate.
+
 ## Alignment step 1: identifying data out of the tree and history, 2026-11-23
 
 - The Route 53 tests used real record names; they now use example names.

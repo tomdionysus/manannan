@@ -2,14 +2,16 @@
 
 ## Resume here
 
-Nothing is in flight and no build-cluster cores are held. 0.3.0 is released
-in the apt repository and both production nodes run it from the package. The
-tree is on main only; CI, CodeQL and Codecov are green. 59 GoogleTest tests,
-line coverage above 99%. On 2026-11-23 the owner chose, area by area, to bring
-Manannan into line with the group standards as 0.4.0 (Decisions 9 to 15); the
-gaps, choices, target layout and order are in TODO/2026-11-23-alignment.md.
-The next step is work item 1: replace the real record names in the tests,
-then rewrite history. The force-push waits on the owner's word at the time.
+The alignment to the group standards (Decisions 9 to 15,
+TODO/2026-11-23-alignment.md) is under way on `develop`, worked
+autonomously on the owner's word ("work autonomously until Manannan is
+standard"). Steps 1 to 6 are done (see COMPLETED.md); the next is step 7, the
+injected clock. Nothing is pushed: history was rewritten locally, and main,
+develop and every tag wait on the owner's word for a force-push. No
+build-cluster cores are held; builds run on a claimed Pi with
+build/pi-test.sh and build/pi-ci.sh (untracked helpers: they rsync the tree
+to /root/manannan-work and run there). 0.3.0 is what the apt repository and
+both nodes run.
 
 ## Principles
 
