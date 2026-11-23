@@ -245,6 +245,17 @@ TEST_F(Route53Requests, SendsTheSessionToken) {
   EXPECT_TRUE(contains(request.header("authorization"), "SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-security-token,"));
 }
 
+TEST_F(Route53Requests, NeverLogsTheSecrets) {
+  list_body = record_set("a.example.com.", "A", "192.0.2.1");
+  auto& plugin = registry("", "    credentials: {access_key_id: AKIDTMP, secret_access_key: S3CR3T-KEY, session_token: S3CR3T-TOKEN}\n");
+  EXPECT_EQ(plugin.get_value("a.example.com"), "192.0.2.1");
+  plugin.set_value("a.example.com", "192.0.2.2");
+  ASSERT_EQ(server.requests().size(), 2u);
+  for (const auto level : {manannan::loggers::DEBUG, manannan::loggers::INFO, manannan::loggers::WARN, manannan::loggers::ERROR})
+    for (const auto& line : logger->at(level)) EXPECT_FALSE(contains(line, "S3CR3T")) << line;
+  EXPECT_FALSE(logger->at(manannan::loggers::DEBUG).empty());
+}
+
 TEST_F(Route53Requests, ReportsErrorStatusesWithTheirBody) {
   status = 400;
   list_body = "<ErrorResponse>InvalidChangeBatch</ErrorResponse>";

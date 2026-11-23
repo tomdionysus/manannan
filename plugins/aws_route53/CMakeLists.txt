@@ -7,7 +7,7 @@
 find_package(CURL REQUIRED)
 find_package(OpenSSL REQUIRED)
 # Signing is a library of its own so the tests can check it against fixed times.
-add_library(manannan_aws_sigv4 STATIC aws_sigv4.cpp)
+add_library(manannan_aws_sigv4 STATIC aws_sigv4.cpp secret.cpp)
 target_include_directories(manannan_aws_sigv4 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(manannan_aws_sigv4 PUBLIC OpenSSL::Crypto PRIVATE manannan_warnings)
 add_library(manannan_registry_aws_route53 MODULE aws_route53.cpp)

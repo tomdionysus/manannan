@@ -25,6 +25,7 @@
 namespace {
 
 using manannan::aws::Credentials;
+using manannan::aws::Secret;
 
 std::size_t append_data(char* data, std::size_t size, std::size_t count, void* target) {
   static_cast<std::string*>(target)->append(data, size * count);
@@ -76,13 +77,13 @@ Credentials read_credentials(const YAML::Node& node, const std::string& where, b
     if (!node.IsMap()) throw std::runtime_error(where + ": 'credentials' must be a mapping");
     check_keys(node, where + " credentials", {"access_key_id", "secret_access_key", "session_token"});
     credentials.access_key_id = expand(scalar(node, "access_key_id", where, false));
-    credentials.secret_access_key = expand(scalar(node, "secret_access_key", where, false));
-    credentials.session_token = expand(scalar(node, "session_token", where, false));
+    credentials.secret_access_key = Secret(expand(scalar(node, "secret_access_key", where, false)));
+    credentials.session_token = Secret(expand(scalar(node, "session_token", where, false)));
   }
   if (environment_fallback) {
     if (credentials.access_key_id.empty()) credentials.access_key_id = environment("AWS_ACCESS_KEY_ID");
-    if (credentials.secret_access_key.empty()) credentials.secret_access_key = environment("AWS_SECRET_ACCESS_KEY");
-    if (credentials.session_token.empty()) credentials.session_token = environment("AWS_SESSION_TOKEN");
+    if (credentials.secret_access_key.empty()) credentials.secret_access_key = Secret(environment("AWS_SECRET_ACCESS_KEY"));
+    if (credentials.session_token.empty()) credentials.session_token = Secret(environment("AWS_SESSION_TOKEN"));
   }
   return credentials;
 }
@@ -300,7 +301,8 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
     curl_slist* raw_headers = nullptr;
     const std::vector<std::string> values{
         "Authorization: " + signed_request.authorization, "x-amz-date: " + signed_request.amz_date, "x-amz-content-sha256: " + signed_request.content_sha256,
-        record.credentials.session_token.empty() ? "" : "x-amz-security-token: " + record.credentials.session_token, "Content-Type: application/xml"};
+        record.credentials.session_token.empty() ? "" : "x-amz-security-token: " + std::string(record.credentials.session_token.reveal()),
+        "Content-Type: application/xml"};
     for (const auto& header : values)
       if (!header.empty()) raw_headers = curl_slist_append(raw_headers, header.c_str());
     std::unique_ptr<curl_slist, decltype(&curl_slist_free_all)> headers(raw_headers, curl_slist_free_all);
