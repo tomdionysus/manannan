@@ -41,6 +41,12 @@ and both nodes run.
   and a board note naming the package and the machine. A note goes on the
   board before anything disruptive.
 - A Pi that drops out is normal: release, rerun once elsewhere.
+- No preferred nodes (2026-11-23): take whichever Pi has the cores free
+  now, rsync the tree there and build from scratch. Never queue for a Pi
+  because it holds a warm tree. Install a missing tool or -dev package
+  yourself (one core, nice 19, a board note). Wait only when no machine has
+  the cores, naming every machine. The one exception is a job that must run
+  on one machine (TSan on the clang 19 Pi); the claim's job text says so.
 
 ## Decisions
 
@@ -87,6 +93,16 @@ and both nodes run.
 ## Waiting on the owner
 
 1. The apt upload of incoming/manannan/0.4.0, then each node's upgrade.
+2. Review of TODO/2026-11-23-clustered-dns-spec.md (third draft, after a
+   critique and the owner's answers; one release, 0.5.0, does everything
+   but the cloud-style features): Manannan as a clustered authoritative DNS server on
+   Dannan and Dagda, owning DNS (wire format, UDP and TCP listeners, server),
+   with DNSSEC from the first serving version, an admin console on Route 53's
+   model and sign-in through a Lugh plugin. Four open questions (section
+   15). The spec moves the upstream configuration from YAML into Dagda (the
+   owner's direction), which supersedes Decision 12 for the cluster
+   versions. The requests to the sibling projects (section 14) wait on the
+   owner's approval of the spec.
    (main, develop and the 0.4.0 tag are pushed; CI and CodeQL green on main.)
 
 ## The work, in order
