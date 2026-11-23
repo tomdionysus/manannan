@@ -86,9 +86,8 @@ and both nodes run.
 
 ## Waiting on the owner
 
-1. Push main and the 0.4.0 tag: `git push origin main 0.4.0` (a fast-forward
-   of main). Recommendation: push, then confirm CI green on main.
-2. The apt upload of incoming/manannan/0.4.0, then each node's upgrade.
+1. The apt upload of incoming/manannan/0.4.0, then each node's upgrade.
+   (main, develop and the 0.4.0 tag are pushed; CI and CodeQL green on main.)
 
 ## The work, in order
 
