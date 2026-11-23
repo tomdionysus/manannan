@@ -1,8 +1,8 @@
 # Manannan as a clustered authoritative DNS server: the specification
 
-Status: third draft, after a critique and the owner's answers of 2026-11-23
-(section 15).
-Nothing here is built. Facts about sibling projects come from their
+Status: the design for 0.5.0, settled with the owner question by question
+on 2026-11-23 (section 15); nothing in it is open. Nothing here is built.
+Facts about sibling projects come from their
 documents and public headers as of 2026-11-23, and are unverified until each
 project's session confirms them (section 14).
 
@@ -625,13 +625,20 @@ The work lands on `develop` as feature branches in this order, each keeping
 R1 to R7 working (the existing tests and the 0.4 upgrade path prove it):
 
 1. On the stack: composed on Dannan, upstream settings in Dagda, the 0.4
-   migration, AAAA, packages for arm64 and x86-64.
-2. The DNS server: wire format, listeners, query engine, zones in Dagda,
-   node-bound records and slots, the node zone, rate limiting.
-3. DNSSEC: signing, keys, rollover, the compromise procedure.
-4. Registrar plugins, Route 53 Domains first.
-5. The API, the dashboard, the authentication plugin kind and the Lugh
-   plugin.
+   migration (founding a cluster, and importing a joining node's records),
+   plugin ABI 3, AAAA, packages for arm64 and x86-64.
+2. The DNS server: wire format, listeners, query engine, zones in Dagda with
+   the merge and repair rule, node-bound records and slots, visibility per
+   record set, rate limiting.
+3. DNSSEC: per-node signing keys, the threshold key-signing key (FROST, in
+   Dannan if the network project takes it, otherwise here first), rollover,
+   CDS and CDNSKEY, revocation of a lost node.
+4. Registrar plugins: Route 53 Domains, GoDaddy, generic RFC 2136.
+5. The operator's optional features (section 8.4): service record sets,
+   signed dynamic update with expiring records, views, and the resolver for
+   internal clients (forwarding and full recursion).
+6. The REST API, the dashboard, the authentication plugin kind and the Lugh
+   plugin, the local administrator, roles per zone.
 
 0.5.0 cannot ship before the sibling work it stands on exists (section 14):
 Dannan's HTTP server and credential helper, and Dagda's register maps and
@@ -674,21 +681,21 @@ that proves it done.
     re-sharing) lives with its other cryptographic primitives.
   - Revocation of a node, as the trigger for removing its keys.
   - The HTTP server, JSON and the password credential helper.
+  - The DNS client (planned for 0.13.0), where Manannan resolves names for
+    its own use.
 - The storage project:
   - Register maps, and head-backed leases with a fence, for the registrar
     writer (section 7.3).
   - A head with a merge Manannan supplies, per record set.
-  - Sealed secrets readable by the cluster's nodes.
+  - Secrets sealed to one named node (upstream credentials; section 7.3).
   - Watch, for change notification.
-  - Secrets sealed to one named node.
-- The directory project: the relying-party client, which Manannan's Lugh
-  authentication plugin uses, and a way to read a user's groups for role
-  mapping; the shared UI shell at a tagged version, with whatever a
-  Route 53-style table-and-form console needs from it.
+- The directory project: the relying-party client (`lugh_client`), a user's
+  groups (the `groups` scope, or the users API) and an app's roles map for
+  role mapping, and the shared UI shell (`@lugh/admin-ui`), all present at
+  Lugh 0.6.0 by that project's account; Manannan is to be added to its
+  dependants when it adopts them.
 
-## 15. The owner's answers (2026-11-23) and what is still open
-
-Answered:
+## 15. The owner's answers (2026-11-23)
 
 1. DNS is Manannan's: it owns the UDP and TCP listeners for DNS and the DNS
    server itself. Dannan is the fundamental layer and depends on Manannan
@@ -698,7 +705,8 @@ Answered:
    addresses that change often, but are not a constraint. A zone may also be
    delegated to the cluster in-domain with glue, or to another set of name
    servers (section 3).
-3. Development runs as minor versions from 0.5.0.
+3. 0.5.0 is the next version (and answer 12: it does everything but the
+   cloud-style features, with no stepped releases).
 4. The common record types first; more later as needed.
 5. DNSSEC from the first serving version.
 6. Packages for arm64 and x86-64.
@@ -719,7 +727,6 @@ Answered:
 14. The zone data lives in Dagda, with the rest of the configuration.
 15. A restarted node serves its saved copy at once (section 5.4).
 16. Edits merge, with a repair rule (section 9.1).
-
 17. Reachability is Dannan's; Manannan adds no test (section 5.1).
 18. DNSSEC keys: Ed25519, a signing key per node that never leaves it, and
     a FROST threshold key-signing key no node holds (section 6).
@@ -740,7 +747,6 @@ Answered:
     (section 8.4).
 26. Public or internal is decided per record set (section 8.4).
 27. The threshold scheme is asked of Dannan (section 14).
-
 28. A resolver for internal clients, forwarding or fully recursive as
     configured, off by default and never on a public address (section 8.4).
 29. If Dannan cannot take the threshold scheme soon, Manannan writes it and
@@ -748,8 +754,5 @@ Answered:
 30. The production nodes: one founds the cluster from its 0.4 files, and
     the other joins and has its 0.4 records imported (section 12).
 31. The plugin ABI is extended to version 3, keeping the present interface.
-
 32. The API follows the group's standards: REST over HTTP with JSON, as the
     directory project's API does (section 11.2).
-
-Nothing is open.

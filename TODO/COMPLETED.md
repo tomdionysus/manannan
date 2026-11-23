@@ -3,6 +3,29 @@
 Newest first. Each entry: what landed, the commit, and its gate counts (tests
 run and passed, sanitizers run). Each session leaves a handoff here.
 
+## Handoff, 2026-11-23: 0.4.0 pushed, the 0.5.0 design settled
+
+- On the owner's "push": main (3d7c225), develop and the 0.4.0 tag pushed,
+  both fast-forwards. CI (all jobs) and CodeQL green on main.
+- The 0.5.0 design written and settled with the owner question by question:
+  TODO/2026-11-23-clustered-dns-spec.md (committed 9ea2693). Manannan
+  becomes a clustered authoritative DNS server on Dannan and Dagda, keeping
+  every 0.4 function. 32 answers recorded in its section 15; nothing open.
+- The design went through a critique before the owner's later rounds. What
+  it changed: each node publishes only its own address (no shared publisher
+  to split-brain); a restarted node serves its saved zones at once; merges
+  end in a deterministic repair rule; DNSSEC keys are per node with a FROST
+  threshold key-signing key no node holds, so a stolen node exposes no zone
+  key; credentials are per node with least privilege.
+- Corrections taken on the way: Dannan depends on Manannan in nothing, and
+  reachability is Dannan's (no test of Manannan's own); the DNS needs five
+  sibling projects sent in on a coordinator's wrong steer were withdrawn the
+  same day, so the spec names no consumer.
+- A Chrome attempt to file a GitHub Support request was stopped by the
+  owner; the request was then dropped for good (Decision 16) and the owner's
+  global rule now forbids browser use unasked (Decision 18).
+- PLUGINS.md now describes the 0.4.0 back-off. No code changed.
+
 ## 0.4.0 built and staged, 2026-11-23 (main 3d7c225, tag 0.4.0)
 
 - On the owner's word: main and the tags 0.2.0, 0.3.0, v0.2.0 and v0.3.0
@@ -31,11 +54,11 @@ run and passed, sanitizers run). Each session leaves a handoff here.
   gates ran before this test-only change).
 - Not done: hosted CI, merge to main, tag, package build and staging. They
   wait on the push (ACTIVE.md).
-- On the owner's go, one production node's 0.3.0 configuration gained the record
-  a record in a second zone (asked by the SIP server project's session; backup
-  a backup named in CLAUDE.local.md on the node). After a restart, the journal
-  shows "set aws_route53:<record> to <the node's address>", and it
-  resolves at the zone's nameserver and publicly. That is also the first
+- On the owner's go, one production node's 0.3.0 configuration gained a
+  record in a second zone (asked by the SIP server project's session; the
+  node, record and backup are in CLAUDE.local.md). After a restart, the
+  journal showed the record set to the node's address, and it resolved at
+  the zone's name server and publicly. That is also the first
   real record write under the hardened unit, which the plan was waiting to
   observe.
 

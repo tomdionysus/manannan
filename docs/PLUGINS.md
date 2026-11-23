@@ -51,7 +51,10 @@ const manannan::PluginDescriptor* manannan_plugin_descriptor() { return &descrip
 - On each cycle Manannan calls the source once. It then calls `get_value` for
   every record of every registry, and `set_value` for records whose value differs.
 - An exception from `get_value` or `set_value` is logged against that record
-  and does not affect other records.
+  and does not affect other records. A record that keeps failing is retried
+  less often, from one cadence up to 64, and is parked after 8 failures in
+  a row (see [running.md](running.md)). An exception from the source backs
+  off the whole cycle the same way.
 - Plugins are loaded with `RTLD_LOCAL` and stay loaded until shutdown.
 - The interface uses C++ types, so a plugin must be built with the same
   compiler family, C++ standard library and yaml-cpp as Manannan.
