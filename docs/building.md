@@ -6,10 +6,10 @@ other distributions and architectures, or to work on Manannan.
 
 ## Requirements
 
-- Linux with systemd. The package lists below cover Debian 12+, Ubuntu 22.04+,
+- Linux with systemd. The package lists below cover Debian 12+, Ubuntu 24.04+,
   Raspberry Pi OS, Fedora, RHEL 9+ and its rebuilds, Arch and openSUSE
   Tumbleweed.
-- A C++20 compiler, CMake 3.20+, yaml-cpp 0.6+, libcurl and OpenSSL libcrypto;
+- A C++20 compiler, CMake 3.24+, yaml-cpp 0.6+, libcurl and OpenSSL libcrypto;
   GoogleTest 1.12+ for the tests.
 
 ```sh
@@ -41,7 +41,7 @@ git clone https://github.com/tomdionysus/manannan.git
 cd manannan
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMANANNAN_BUILD_TESTING=ON
 cmake --build build
-./build/tests/manannan_tests
+./build/manannan_tests
 sudo cmake --install build
 ```
 
@@ -55,22 +55,24 @@ paths, so they stay consistent under any prefix or libdir layout.
 
 | Installed | Path (default prefix) |
 | --- | --- |
-| Daemon | `/usr/local/sbin/manannan` |
+| Daemon | `/usr/local/bin/manannan` |
 | Manual page | `/usr/local/share/man/man8/manannan.8` |
 | Plugins | `/usr/local/lib/manannan/plugins` (`lib64` on RPM-based distributions) |
-| Configuration | `/usr/local/etc/manannan/manannan.yaml` |
-| Keys (you create them) | `/usr/local/etc/manannan/environment` |
+| Configuration | `/usr/local/etc/manannan/config.yaml` |
+| Secrets (you create them) | `/usr/local/etc/manannan/secrets.yaml` |
 | systemd unit | `/usr/local/lib/systemd/system/manannan.service` |
+| System user | `/usr/local/lib/sysusers.d/manannan.conf` |
 | Plugin headers | `/usr/local/include/manannan` |
 
-Reinstalling never overwrites an existing `manannan.yaml`.
+Reinstalling never overwrites an existing `config.yaml`.
 
 Configure as in [configuration.md](configuration.md), using these paths.
-The keys file is not created for you; make it root-only:
+Create the service's user, and the secrets file readable by it alone:
 
 ```sh
-sudo install -m 600 /dev/null /usr/local/etc/manannan/environment
-sudoedit /usr/local/etc/manannan/environment
+sudo systemd-sysusers /usr/local/lib/sysusers.d/manannan.conf
+sudo install -m 600 -o manannan -g manannan /dev/null /usr/local/etc/manannan/secrets.yaml
+sudoedit /usr/local/etc/manannan/secrets.yaml
 ```
 
 Then start the service:
@@ -87,19 +89,20 @@ To upgrade, `git pull`, rebuild, run the tests and reinstall as above, then
 
 ```sh
 sudo systemctl disable --now manannan
-sudo rm /usr/local/sbin/manannan /usr/local/lib/systemd/system/manannan.service /usr/local/share/man/man8/manannan.8
+sudo rm /usr/local/bin/manannan /usr/local/lib/systemd/system/manannan.service /usr/local/share/man/man8/manannan.8
+sudo rm /usr/local/lib/sysusers.d/manannan.conf
 sudo rm -rf /usr/local/lib*/manannan /usr/local/include/manannan /usr/local/etc/manannan
 sudo systemctl daemon-reload
 ```
 
-The last `rm` also removes the configuration and the keys.
+The last `rm` also removes the configuration and the secrets.
 
 ## Moving a source install to the package
 
 The unit under `/usr/local/lib/systemd/system` overrides the package's, so the
 source install has to go first.
 
-1. Keep a copy of the configuration and keys:
+1. Keep a copy of the configuration and secrets:
 
    ```sh
    sudo cp -a /usr/local/etc/manannan /root/manannan-backup
@@ -107,14 +110,14 @@ source install has to go first.
 
 2. Uninstall the source install as above, then install the package (see the
    [README](../README.md#install)).
-3. Copy the old configuration into `/etc/manannan/manannan.yaml`, changing
+3. Copy the old configuration into `/etc/manannan/config.yaml`, changing
    `plugin_directories` to the packaged path (the one in the packaged file,
    such as `/usr/lib/aarch64-linux-gnu/manannan/plugins`). With the old path
    Manannan finds no plugins and does not start.
-4. Copy the keys, keeping them root-only:
+4. Copy the secrets over the package's, keeping their owner and mode:
 
    ```sh
-   sudo install -m 600 /root/manannan-backup/environment /etc/manannan/environment
+   sudo install -m 600 -o manannan -g manannan /root/manannan-backup/secrets.yaml /etc/manannan/secrets.yaml
    ```
 
 5. `sudo systemctl enable --now manannan` and check `journalctl -u manannan`.
@@ -125,13 +128,25 @@ source install has to go first.
 | --- | --- | --- |
 | `MANANNAN_BUILD_TESTING` | `OFF` | Build `manannan_tests` (GoogleTest) |
 | `MANANNAN_WARNINGS_AS_ERRORS` | `OFF` | Treat compiler warnings as errors |
-| `MANANNAN_COVERAGE` | `OFF` | Instrument the daemon, plugins and tests for gcov |
+| `MANANNAN_BUILD_FUZZING` | `OFF` | Build each fuzz target (clang and libFuzzer) |
 
-`scripts/ci.sh` is what CI runs on Debian trixie: the tests in a release
-build with warnings as errors, under AddressSanitizer and
-UndefinedBehaviorSanitizer, and in a coverage build with an lcov report.
-`scripts/build-deb.sh` builds the Debian packages; see
-[packaging.md](packaging.md).
+`tools/ci.sh <step>` runs one CI step on Debian trixie, the same in GitHub's
+runner as on a build machine:
+
+| Step | What it does |
+| --- | --- |
+| `check` | the header block on every source; clang-format |
+| `release` | g++ release build, warnings as errors, the tests |
+| `clang` | the same with clang++ and its thread-safety analysis |
+| `tidy` | clang-tidy's use-after-move check |
+| `asan` | the tests under AddressSanitizer and UndefinedBehaviorSanitizer |
+| `tsan` | the tests under ThreadSanitizer |
+| `package` | install, then build and run a plugin against the installed headers |
+| `coverage` | the tests in a coverage build, with an lcov report |
+| `fuzz` | each fuzz target for `FUZZ_SECONDS` (default 60) |
+
+Builds go under `build-ci/`. `tools/build-deb.sh` builds the Debian packages;
+see [packaging.md](packaging.md).
 
 `.clang-format` is authoritative: run `clang-format -i` on the files you
 change. CI fails any source that clang-format would change.

@@ -4,15 +4,20 @@
 # Copyright (C) 2026 Tom Cully <mail@tomcully.com>
 # Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
 #
-# CodeQL security analysis of the daemon and plugins, built as in CI.
+# CodeQL's security-and-quality queries over the daemon and plugins, on each
+# push to main and weekly.
 name: CodeQL
 
 on:
   push:
-    branches: [main, develop]
-  pull_request:
+    branches: [main]
+    paths-ignore: ["TODO/**", "docs/**", "**/*.md"]
   schedule:
     - cron: "23 4 * * 1"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

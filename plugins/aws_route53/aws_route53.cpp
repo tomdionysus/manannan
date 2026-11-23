@@ -1,3 +1,9 @@
+//
+// Manannan - plugin-based dynamic DNS updater
+//
+// Copyright (C) 2026 Tom Cully <mail@tomcully.com>
+// Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
+//
 #include <curl/curl.h>
 
 #include <algorithm>
@@ -6,7 +12,6 @@
 #include <cstdlib>
 #include <initializer_list>
 #include <memory>
-#include <regex>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -15,13 +20,18 @@
 #include "aws_sigv4.h"
 #include "manannan/plugin.h"
 #include "manannan/version.h"
+#include "route53_response.h"
 
 namespace {
 
 using manannan::aws::Credentials;
+using manannan::aws::Secret;
 
+// Stops the transfer, by taking nothing, once the response would pass its cap.
 std::size_t append_data(char* data, std::size_t size, std::size_t count, void* target) {
-  static_cast<std::string*>(target)->append(data, size * count);
+  auto& response = *static_cast<std::string*>(target);
+  if (response.size() + size * count > manannan::aws::max_response_bytes) return 0;
+  response.append(data, size * count);
   return size * count;
 }
 
@@ -70,13 +80,13 @@ Credentials read_credentials(const YAML::Node& node, const std::string& where, b
     if (!node.IsMap()) throw std::runtime_error(where + ": 'credentials' must be a mapping");
     check_keys(node, where + " credentials", {"access_key_id", "secret_access_key", "session_token"});
     credentials.access_key_id = expand(scalar(node, "access_key_id", where, false));
-    credentials.secret_access_key = expand(scalar(node, "secret_access_key", where, false));
-    credentials.session_token = expand(scalar(node, "session_token", where, false));
+    credentials.secret_access_key = Secret(expand(scalar(node, "secret_access_key", where, false)));
+    credentials.session_token = Secret(expand(scalar(node, "session_token", where, false)));
   }
   if (environment_fallback) {
     if (credentials.access_key_id.empty()) credentials.access_key_id = environment("AWS_ACCESS_KEY_ID");
-    if (credentials.secret_access_key.empty()) credentials.secret_access_key = environment("AWS_SECRET_ACCESS_KEY");
-    if (credentials.session_token.empty()) credentials.session_token = environment("AWS_SESSION_TOKEN");
+    if (credentials.secret_access_key.empty()) credentials.secret_access_key = Secret(environment("AWS_SECRET_ACCESS_KEY"));
+    if (credentials.session_token.empty()) credentials.session_token = Secret(environment("AWS_SESSION_TOKEN"));
   }
   return credentials;
 }
@@ -122,34 +132,6 @@ std::string xml_escape(const std::string& value) {
   return result;
 }
 
-std::string xml_unescape(std::string value) {
-  const std::vector<std::pair<std::string, std::string>> replacements{{"&lt;", "<"}, {"&gt;", ">"}, {"&quot;", "\""}, {"&apos;", "'"}, {"&amp;", "&"}};
-  for (const auto& [encoded, plain] : replacements) {
-    std::size_t position = 0;
-    while ((position = value.find(encoded, position)) != std::string::npos) {
-      value.replace(position, encoded.size(), plain);
-      position += plain.size();
-    }
-  }
-  return value;
-}
-
-// Route 53 returns names in lower case with characters outside [a-z0-9-_.] as
-// three-digit octal escapes, for example "*" as "\052".
-std::string decode_dns_name(const std::string& value) {
-  std::string result;
-  for (std::size_t i = 0; i < value.size(); ++i) {
-    if (value[i] == '\\' && i + 3 < value.size() && std::isdigit(static_cast<unsigned char>(value[i + 1])) &&
-        std::isdigit(static_cast<unsigned char>(value[i + 2])) && std::isdigit(static_cast<unsigned char>(value[i + 3]))) {
-      result += static_cast<char>(std::stoi(value.substr(i + 1, 3), nullptr, 8));
-      i += 3;
-    } else {
-      result += value[i];
-    }
-  }
-  return lowercase(result);
-}
-
 struct Record {
   std::string name;  // as reported to the service: lower case, no trailing dot
   std::string fqdn;  // as sent to Route 53: lower case, with trailing dot
@@ -160,7 +142,7 @@ struct Record {
 
 class AwsRoute53 final : public manannan::RegistryPlugin {
  public:
-  AwsRoute53(const YAML::Node& config, std::shared_ptr<manannan::loggers::Logger> logger) : logger_private(std::move(logger)) {
+  AwsRoute53(const YAML::Node& config, std::shared_ptr<manannan::loggers::Logger> logger) : _logger(std::move(logger)) {
     const std::string where = "registry.aws_route53";
     if (!config.IsMap()) throw std::runtime_error(where + " must be a mapping");
     if (config["hosted_zone_id"] || config["record_name"]) throw std::runtime_error(where + ": set hosted_zone_id and name on each entry in 'records'");
@@ -168,20 +150,20 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
 
     // The endpoint is a host name, optionally with a port and an http:// or
     // https:// scheme (https when none is given).
-    host_private = scalar(config, "endpoint", where, false);
-    if (host_private.empty()) host_private = "route53.amazonaws.com";
-    if (host_private.starts_with("https://")) {
-      host_private.erase(0, 8);
-    } else if (host_private.starts_with("http://")) {
-      scheme_private = "http";
-      host_private.erase(0, 7);
+    _host = scalar(config, "endpoint", where, false);
+    if (_host.empty()) _host = "route53.amazonaws.com";
+    if (_host.starts_with("https://")) {
+      _host.erase(0, 8);
+    } else if (_host.starts_with("http://")) {
+      _scheme = "http";
+      _host.erase(0, 7);
     }
-    while (host_private.ends_with('/')) host_private.pop_back();
-    if (host_private.empty() || host_private.find_first_of("/?#@ ") != std::string::npos)
+    while (_host.ends_with('/')) _host.pop_back();
+    if (_host.empty() || _host.find_first_of("/?#@ ") != std::string::npos)
       throw std::runtime_error(where + ": 'endpoint' must be a host name, optionally with a scheme and port");
-    region_private = config["signing_region"].as<std::string>("us-east-1");
-    timeout_private = config["timeout_seconds"].as<long>(10);
-    if (region_private.empty() || timeout_private <= 0) throw std::runtime_error(where + ": signing_region must be set and timeout_seconds must be positive");
+    _region = config["signing_region"].as<std::string>("us-east-1");
+    _timeout = config["timeout_seconds"].as<long>(10);
+    if (_region.empty() || _timeout <= 0) throw std::runtime_error(where + ": signing_region must be set and timeout_seconds must be positive");
     const auto default_ttl = read_ttl(config, 60, where);
     const auto base_credentials = read_credentials(config["credentials"], where, true);
 
@@ -212,50 +194,40 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
         record.credentials = base_credentials;
       }
       if (find(record.name)) throw std::runtime_error(where + ": record " + record.name + " is listed twice");
-      logger_private->debug("record " + record.name + " in zone " + record.zone + " with TTL " + std::to_string(record.ttl) +
-                            (entry["credentials"] ? " using its own credentials" : " using the base credentials"));
-      records_private.push_back(std::move(record));
+      _logger->debug("record " + record.name + " in zone " + record.zone + " with TTL " + std::to_string(record.ttl) +
+                     (entry["credentials"] ? " using its own credentials" : " using the base credentials"));
+      _records.push_back(std::move(record));
     }
     if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) throw std::runtime_error("cannot initialise libcurl");  // LCOV_EXCL_LINE
   }
 
   ~AwsRoute53() override {
-    logger_private->debug("destroy()");
+    _logger->debug("destroy()");
     curl_global_cleanup();
   }
 
   std::vector<std::string> records() const override {
     std::vector<std::string> names;
-    for (const auto& record : records_private) names.push_back(record.name);
+    for (const auto& record : _records) names.push_back(record.name);
     return names;
   }
 
   std::string get_value(const std::string& name) override {
     const auto& record = lookup(name);
-    logger_private->debug("reading A record " + record.fqdn + " in zone " + record.zone);
+    _logger->debug("reading A record " + record.fqdn + " in zone " + record.zone);
     const auto query = "maxitems=1&name=" + manannan::aws::url_encode(record.fqdn) + "&type=A";
     const auto response = request(record, "GET", rrset_path(record), query, "");
-    const std::regex set_pattern("<ResourceRecordSet>([\\s\\S]*?)</ResourceRecordSet>");
-    const std::regex name_pattern("<Name>([^<]+)</Name>");
-    const std::regex value_pattern("<ResourceRecord>\\s*<Value>([^<]+)</Value>");
-    for (auto current = std::sregex_iterator(response.begin(), response.end(), set_pattern); current != std::sregex_iterator(); ++current) {
-      const auto set = (*current)[1].str();
-      std::smatch name_match;
-      std::smatch value_match;
-      if (std::regex_search(set, name_match, name_pattern) && decode_dns_name(xml_unescape(name_match[1].str())) == record.fqdn &&
-          set.find("<Type>A</Type>") != std::string::npos && std::regex_search(set, value_match, value_pattern)) {
-        const auto value = xml_unescape(value_match[1].str());
-        logger_private->debug(record.name + " is registered as " + value);
-        return value;
-      }
+    if (const auto value = manannan::aws::find_a_record(response, record.fqdn)) {
+      _logger->debug(record.name + " is registered as " + *value);
+      return *value;
     }
-    logger_private->debug(record.name + " has no A record");
+    _logger->debug(record.name + " has no A record");
     return {};
   }
 
   void set_value(const std::string& name, const std::string& value) override {
     const auto& record = lookup(name);
-    logger_private->debug("setting A record " + record.fqdn + " to " + value);
+    _logger->debug("setting A record " + record.fqdn + " to " + value);
     const auto payload = std::string("<?xml version=\"1.0\" encoding=\"UTF-8\"?>") +
                          "<ChangeResourceRecordSetsRequest xmlns=\"https://route53.amazonaws.com/doc/2013-04-01/\">"
                          "<ChangeBatch><Changes><Change><Action>UPSERT</Action><ResourceRecordSet><Name>" +
@@ -264,12 +236,12 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
                          "</Value></ResourceRecord></ResourceRecords></ResourceRecordSet></Change></Changes></ChangeBatch>"
                          "</ChangeResourceRecordSetsRequest>";
     (void)request(record, "POST", rrset_path(record) + "/", "", payload);
-    logger_private->debug("Route 53 accepted the update for " + record.name);
+    _logger->debug("Route 53 accepted the update for " + record.name);
   }
 
  private:
   const Record* find(const std::string& name) const {
-    for (const auto& record : records_private)
+    for (const auto& record : _records)
       if (record.name == name) return &record;
     return nullptr;
   }
@@ -283,10 +255,10 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
   static std::string rrset_path(const Record& record) { return "/2013-04-01/hostedzone/" + record.zone + "/rrset"; }
 
   std::string request(const Record& record, const std::string& method, const std::string& path, const std::string& query, const std::string& payload) const {
-    const auto base = scheme_private + "://" + host_private + path;
-    logger_private->debug(method + " " + base);
+    const auto base = _scheme + "://" + _host + path;
+    _logger->debug(method + " " + base);
     const auto signed_request =
-        manannan::aws::sign_v4(method, host_private, path, query, payload, record.credentials, region_private, "route53", std::chrono::system_clock::now());
+        manannan::aws::sign_v4(method, _host, path, query, payload, record.credentials, _region, "route53", std::chrono::system_clock::now());
     const auto url = base + (query.empty() ? "" : "?" + query);
     std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> curl(curl_easy_init(), curl_easy_cleanup);
     if (!curl) throw std::runtime_error("cannot initialise HTTP client");  // LCOV_EXCL_LINE
@@ -294,7 +266,8 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
     curl_slist* raw_headers = nullptr;
     const std::vector<std::string> values{
         "Authorization: " + signed_request.authorization, "x-amz-date: " + signed_request.amz_date, "x-amz-content-sha256: " + signed_request.content_sha256,
-        record.credentials.session_token.empty() ? "" : "x-amz-security-token: " + record.credentials.session_token, "Content-Type: application/xml"};
+        record.credentials.session_token.empty() ? "" : "x-amz-security-token: " + std::string(record.credentials.session_token.reveal()),
+        "Content-Type: application/xml"};
     for (const auto& header : values)
       if (!header.empty()) raw_headers = curl_slist_append(raw_headers, header.c_str());
     std::unique_ptr<curl_slist, decltype(&curl_slist_free_all)> headers(raw_headers, curl_slist_free_all);
@@ -304,8 +277,8 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
     curl_easy_setopt(curl.get(), CURLOPT_HTTPHEADER, headers.get());
     curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, append_data);
     curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &response);
-    curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT, timeout_private);
-    curl_easy_setopt(curl.get(), CURLOPT_USERAGENT, user_agent.c_str());
+    curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT, _timeout);
+    curl_easy_setopt(curl.get(), CURLOPT_USERAGENT, _user_agent.c_str());
     if (method == "POST") {
       curl_easy_setopt(curl.get(), CURLOPT_POST, 1L);
       curl_easy_setopt(curl.get(), CURLOPT_POSTFIELDS, payload.c_str());
@@ -319,13 +292,13 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
     return response;
   }
 
-  const std::string user_agent = std::string("Manannan/") + manannan::version;
-  std::string scheme_private = "https";
-  std::string host_private;
-  std::string region_private;
-  long timeout_private{};
-  std::vector<Record> records_private;
-  std::shared_ptr<manannan::loggers::Logger> logger_private;
+  const std::string _user_agent = std::string("Manannan/") + manannan::version;
+  std::string _scheme = "https";
+  std::string _host;
+  std::string _region;
+  long _timeout{};
+  std::vector<Record> _records;
+  std::shared_ptr<manannan::loggers::Logger> _logger;
 };
 
 manannan::Plugin* create(const YAML::Node& config, std::shared_ptr<manannan::loggers::Logger> logger) {

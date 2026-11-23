@@ -3,6 +3,85 @@
 Newest first. Each entry: what landed, the commit, and its gate counts (tests
 run and passed, sanitizers run). Each session leaves a handoff here.
 
+## Handoff, 2026-11-23: 0.4.0 gated locally, waiting on the push
+
+- Version 0.4.0 on develop (99e4957). Release gates, each once, on claimed
+  Pis: tools/ci.sh check, release (89 run, 89 passed), clang 19 (89/89),
+  tidy, asan with UBSan (89/89), package (consumer OK at 0.4.0, plugin ABI
+  2), coverage 99.4% of lines (988 of 994) and 97.7% of functions (127 of
+  130), fuzz (both targets 60 s, clean); TSan on the clang 19 Pi (89/89)
+  after a fix to one test (4ad76ce): under TSan a signal's handler runs at
+  the next intercepted call, not inside pselect, so the test read its flag
+  too soon (failing under TSan, passing with the check moved; the other
+  gates ran before this test-only change).
+- Not done: hosted CI, merge to main, tag, package build and staging. They
+  wait on the push (ACTIVE.md).
+- On the owner's go, one production node's 0.3.0 configuration gained the record
+  a record in a second zone (asked by the SIP server project's session; backup
+  a backup named in CLAUDE.local.md on the node). After a restart, the journal
+  shows "set aws_route53:<record> to <the node's address>", and it
+  resolves at the zone's nameserver and publicly. That is also the first
+  real record write under the hardened unit, which the plan was waiting to
+  observe.
+
+## Alignment steps 7 to 12, 2026-11-23 (develop a416ce6 to 265d11e)
+
+- Injected clock (a416ce6): `Clock` with now() and a signal-aware
+  wait_until(); `SystemClock` waits in pselect; the service tests step a fake
+  clock and sleep for none of it. A failed wait restores the signal state
+  (tested). The cadence test was seen red with the deadline taken before the
+  cycle.
+- Secret type (0c8a445): AWS secret key and session token in an mmap'd,
+  mlock'd, MADV_DONTDUMP page cleansed on release; not printable or
+  convertible; SigV4 derives keys in cleansed buffers; a test finds neither
+  secret in any log line of a full read and update.
+- Configuration (8a994bd): config.yaml plus secrets.yaml (owner-only, merged
+  over it), MANANNAN_<KEY> and --<key> overrides, log.level and log.format
+  (json lines), --config/--secrets, `manannan migrate`; /usr/bin, a
+  manannan system user (sysusers), preinst/postinst migration, rm_conffile.
+  Proven on a build machine: the published 0.3.0 package with a 0.3 config
+  and environment, upgraded to the new build, migrated (config.yaml,
+  secrets.yaml 0600 manannan:manannan, user created), and the hardened unit
+  started and loaded its keys; systemd-analyze security 1.1 OK; lintian
+  clean; then purged. A yaml-cpp merge by Node assignment lost the manannan
+  root under test; the merge is made in place instead.
+- Fuzz targets (39cf3df): route53_response and checkip_body under
+  manannan/fuzz; the response reader is find-based instead of std::regex;
+  an escape such as \999 no longer throws (fixed, tested); responses capped
+  at 1 MiB, check IP bodies at 64 bytes (tested). Both targets 60 s clean
+  under ASan and UBSan (the response reader: 2,190,414 runs).
+- Back-off (65abd37): doubling from one cadence to 64, parked at 8 failures
+  in a row (said once), still retried every 64 cadences, at once on a new
+  source value, and on SIGHUP (`systemctl reload`). The SIGHUP test was seen
+  red without the reset.
+- Project files (265d11e): CONTRIBUTING.md, CODE_OF_CONDUCT.md, CHANGELOG.md,
+  docs/licensing.md.
+- Gates per step on a claimed Pi, tests run and passed: 63, 68 (g++ and
+  clang, tidy, ASan), 79 (and the package build's tests), 84, 89.
+
+## Alignment steps 2 to 6, 2026-11-23 (develop 922269a to dd825c0)
+
+- develop created from main. Each step a feature branch squashed onto it.
+- Layout (922269a): the plugin interface under manannan/include (all that
+  manannan-dev now installs: plugin.h, loggers/logger.h, version.h), the
+  daemon in manannan/daemon (namespace manannan::daemon), the loggers in
+  manannan/loggers, the tests in manannan/test named by subsystem;
+  executables at the top of the build tree.
+- Private members `_name` (b44540a), test fixtures included.
+- Header block on every source, CMake file, script and YAML file; CMake
+  3.24 (Ubuntu 22.04 leaves the source-build list); -Wthread-safety under
+  clang (49130f0).
+- tools/ci.sh with the group's steps and a fuzz step; the template
+  workflow with concurrency and paths-ignore, x86-64 and arm64 jobs, deb on
+  both; CodeQL on main and weekly; codecov.yml ignores; release badge; bare
+  tags in tools/build-deb.sh; a package consumer (manannan/test/package)
+  that builds a plugin against the installed headers (dd825c0).
+- Gates on a claimed Pi: release (g++) and clang-19 builds with -Werror, 59
+  tests run, 59 passed, each step; tools/ci.sh check (seen red on a missing
+  header first), release, clang, tidy, asan (59 passed), package (consumer
+  OK), coverage 99.2% of lines (636 of 641), 97.7% of functions (85 of 87).
+  The fuzz step waits on step 10; tsan runs at the release gate.
+
 ## Alignment step 1: identifying data out of the tree and history, 2026-11-23
 
 - The Route 53 tests used real record names; they now use example names.

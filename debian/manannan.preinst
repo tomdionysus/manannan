@@ -1,0 +1,24 @@
+#!/bin/sh
+#
+# Manannan - plugin-based dynamic DNS updater
+#
+# Copyright (C) 2026 Tom Cully <mail@tomcully.com>
+# Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
+#
+# manannan preinst: on an upgrade from 0.3, keeps a copy of manannan.yaml for
+# the postinst to migrate, before dpkg retires the old conffile.
+
+set -e
+
+case "$1" in
+    install | upgrade)
+        if [ -n "${2:-}" ] && dpkg --compare-versions "$2" lt 0.4.0~ &&
+            [ -e /etc/manannan/manannan.yaml ] && [ ! -e /etc/manannan/manannan.yaml.pre-0.4.0 ]; then
+            cp -p /etc/manannan/manannan.yaml /etc/manannan/manannan.yaml.pre-0.4.0
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

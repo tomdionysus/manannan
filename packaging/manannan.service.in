@@ -1,18 +1,31 @@
+#
+# Manannan - plugin-based dynamic DNS updater
+#
+# Copyright (C) 2026 Tom Cully <mail@tomcully.com>
+# Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
+#
 [Unit]
 Description=Manannan registry updater
+Documentation=man:manannan(8)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=@CMAKE_INSTALL_FULL_SBINDIR@/manannan @CMAKE_INSTALL_FULL_SYSCONFDIR@/manannan/manannan.yaml
+# secrets.yaml beside the configuration is read when it exists.
+ExecStart=@CMAKE_INSTALL_FULL_BINDIR@/manannan --config @CMAKE_INSTALL_FULL_SYSCONFDIR@/manannan/config.yaml
+# Reload retries every waiting or parked record at once; it does not reread
+# the configuration (restart for that).
+ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=10s
 UMask=0077
 
 # The daemon only reads its configuration and plugins and makes outbound
-# HTTPS requests, so everything else is withheld.
-DynamicUser=yes
+# HTTPS requests, so everything else is withheld. It runs as the manannan
+# system user, which owns secrets.yaml.
+User=manannan
+Group=manannan
 PrivateUsers=yes
 CapabilityBoundingSet=
 AmbientCapabilities=
@@ -41,8 +54,6 @@ SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
 SystemCallErrorNumber=EPERM
-
-EnvironmentFile=-@CMAKE_INSTALL_FULL_SYSCONFDIR@/manannan/environment
 
 [Install]
 WantedBy=multi-user.target

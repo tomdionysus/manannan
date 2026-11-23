@@ -2,14 +2,19 @@
 
 ## Resume here
 
-Nothing is in flight and no build-cluster cores are held. 0.3.0 is released
-in the apt repository and both production nodes run it from the package. The
-tree is on main only; CI, CodeQL and Codecov are green. 59 GoogleTest tests,
-line coverage above 99%. On 2026-11-23 the owner chose, area by area, to bring
-Manannan into line with the group standards as 0.4.0 (Decisions 9 to 15); the
-gaps, choices, target layout and order are in TODO/2026-11-23-alignment.md.
-The next step is work item 1: replace the real record names in the tests,
-then rewrite history. The force-push waits on the owner's word at the time.
+The alignment to the group standards (Decisions 9 to 15,
+TODO/2026-11-23-alignment.md) is done on `develop`, which carries the 0.4.0
+version commit; every local release gate has passed once (COMPLETED.md).
+What remains of the release waits on the owner's word to push (below):
+nothing is pushed, history was rewritten locally, and main and every tag
+need a force-push. After it: hosted CI green on develop, then merge develop
+to main, tag 0.4.0 on main, build the packages from the tag on a claimed
+trixie arm64 Pi, and stage them in the apt tree's incoming/ (Decision 8);
+the owner uploads; nodes upgrade on the owner's go, checking the migration
+at debug on each. No build-cluster cores are held. Builds run through
+build/pi-test.sh and build/pi-ci.sh (untracked helpers: they rsync the tree
+to /root/manannan-work on a claimed Pi). 0.3.0 is what the apt repository
+and both nodes run.
 
 ## Principles
 
@@ -81,31 +86,20 @@ then rewrite history. The force-push waits on the owner's word at the time.
 
 ## Waiting on the owner
 
-1. The force-push of the rewritten history (work item 1), at the time.
-2. Observe the first real record update on either node (the next public IP
-   change) and confirm the `set` line in the journal. Nothing to do until it
-   happens.
+1. Push, with force for the rewritten history: `git push --force origin main
+   0.2.0 0.3.0 v0.2.0 v0.3.0` (main and the four tags), `git push origin
+   develop`, and delete the stale remote branch
+   dependabot/github_actions/actions/checkout-7. The workflows changed, and the
+   gh token has no workflow scope, so this goes over ssh. Recommendation: push.
+2. GitHub keeps refs/pull/1-4/head with the old commits, and the record
+   names in them; only GitHub support can remove those. Recommendation: ask
+   them, since the names are already public DNS names.
+3. After the release is staged: the apt upload, then each node's upgrade.
 
 ## The work, in order
 
-Steps 1 to 13 of TODO/2026-11-23-alignment.md, in that order, each its own
-feature branch squashed onto develop (from step 2) and gated on a claimed Pi.
-In short:
-
-1. Real record names out of the tests; history rewritten; tags re-pointed;
-   force-push on the owner's word.
-2. develop branch.
-3. Layout move, then CMake paths.
-4. `_private` to `_name`.
-5. Header blocks, CMake 3.24, fuzzing option, -Wthread-safety.
-6. tools/ and the full CI set.
-7. Injected clock; service tests step time.
-8. Secret type for credentials.
-9. Configuration and packaging change, with migration and docs.
-10. Fuzz targets: Route 53 response and checkip body.
-11. Back-off with a budget and parked state.
-12. CONTRIBUTING, CODE_OF_CONDUCT, CHANGELOG, docs/licensing.md.
-13. Release 0.4.0; node upgrade and migration check on the owner's go.
+1. Finish 0.4.0 after the push (Resume here). The alignment steps are all
+   done; TODO/2026-11-23-alignment.md is their record.
 
 Then for 0.5.0: AAAA records (an IPv6 source and a record-type setting; a
 plugin interface change bumps `plugin_abi_version`). Waits on the owner

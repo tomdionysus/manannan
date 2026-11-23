@@ -1,0 +1,33 @@
+#
+# Manannan - plugin-based dynamic DNS updater
+#
+# Copyright (C) 2026 Tom Cully <mail@tomcully.com>
+# Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
+#
+# Manannan's configuration. Keys go in secrets.yaml beside it, which is merged
+# over this file and readable by the service only. Any setting here can be
+# overridden by MANANNAN_<KEY> in the environment or --<key> on the command
+# line: log.level is MANANNAN_LOG_LEVEL and --log-level.
+manannan:
+  cadence: 5m
+  source: amazon_check_ip
+  registries:
+    - aws_route53
+  plugin_directories:
+    - @MANANNAN_PLUGIN_DIR@
+
+log:
+  level: info
+  format: text
+
+source:
+  amazon_check_ip:
+    timeout_seconds: 10
+
+registry:
+  aws_route53:
+    ttl: 60
+    timeout_seconds: 10
+    records:
+      - name: home.example.com
+        hosted_zone_id: Z0123456789EXAMPLE

@@ -1,14 +1,22 @@
+//
+// Manannan - plugin-based dynamic DNS updater
+//
+// Copyright (C) 2026 Tom Cully <mail@tomcully.com>
+// Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
+//
 #pragma once
 #include <chrono>
 #include <string>
+
+#include "secret.h"
 
 // AWS Signature Version 4 for a single request, signing the host, the payload
 // hash, the date and, when present, the session token.
 namespace manannan::aws {
 struct Credentials {
-  std::string access_key_id;
-  std::string secret_access_key;
-  std::string session_token;
+  std::string access_key_id;  // an identifier, not a secret: it is in every request
+  Secret secret_access_key;
+  Secret session_token;
 };
 struct SignedRequest {
   std::string authorization;

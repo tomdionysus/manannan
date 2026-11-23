@@ -4,6 +4,7 @@
 [![codecov](https://codecov.io/gh/tomdionysus/manannan/graph/badge.svg)](https://codecov.io/gh/tomdionysus/manannan)
 [![CodeQL](https://github.com/tomdionysus/manannan/actions/workflows/codeql.yml/badge.svg)](https://github.com/tomdionysus/manannan/actions/workflows/codeql.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/tag/tomdionysus/manannan?sort=semver&filter=!v*&label=release)](https://github.com/tomdionysus/manannan/tags)
 
 Manannan keeps DNS records pointed at your public IP address. It runs as a
 service, checks the address every few minutes and updates any record that is
@@ -23,7 +24,7 @@ Elsewhere, build from source: see [docs/building.md](docs/building.md).
 
 ## Set up
 
-1. List your records in `/etc/manannan/manannan.yaml`, under
+1. List your records in `/etc/manannan/config.yaml`, under
    `registry.aws_route53.records`:
 
    ```yaml
@@ -35,12 +36,15 @@ Elsewhere, build from source: see [docs/building.md](docs/building.md).
 2. Add an AWS access key that may update those zones:
 
    ```sh
-   sudoedit /etc/manannan/environment
+   sudoedit /etc/manannan/secrets.yaml
    ```
 
-   ```
-   AWS_ACCESS_KEY_ID=AKIA...
-   AWS_SECRET_ACCESS_KEY=...
+   ```yaml
+   registry:
+     aws_route53:
+       credentials:
+         access_key_id: AKIA...
+         secret_access_key: ...
    ```
 
 3. Start it:
@@ -57,7 +61,7 @@ journalctl -u manannan -f
 
 ```
 [INFO ] managing aws_route53:home.example.com
-[INFO ] Manannan 0.3.0 started
+[INFO ] Manannan 0.4.0 started
 [INFO ] set aws_route53:home.example.com to 203.0.113.7
 ```
 
@@ -74,7 +78,10 @@ Updates arrive with `sudo apt upgrade`.
 - [Building from source](docs/building.md), including moving a source install
   to the package.
 - [Writing plugins](docs/PLUGINS.md) for other sources and providers.
-- [Packaging](docs/packaging.md) and [the name](docs/NAME.md).
+- [Packaging](docs/packaging.md), [licensing](docs/licensing.md) and
+  [the name](docs/NAME.md).
+- [Contributing](CONTRIBUTING.md), the [changelog](CHANGELOG.md) and the
+  [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Licence
 

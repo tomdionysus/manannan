@@ -3,7 +3,15 @@
 manannan \- plugin-based dynamic DNS updater
 .SH SYNOPSIS
 .B manannan
-.I config.yaml
+.RB [ \-\-config
+.IR config.yaml ]
+.RB [ \-\-secrets
+.IR secrets.yaml ]
+.RB [ \-\- \fIsetting\fR
+.IR value ]...
+.br
+.B manannan migrate
+.I manannan.yaml environment config.yaml secrets.yaml
 .br
 .B manannan \-\-version
 .SH DESCRIPTION
@@ -11,34 +19,72 @@ manannan \- plugin-based dynamic DNS updater
 reads a value from a source plugin, typically the host's public IP address,
 and reconciles it with every record held by one or more registry plugins,
 typically DNS providers. It repeats on the cadence the configuration sets
-until it receives SIGINT or SIGTERM. Each record is checked and updated
+until it receives SIGINT or SIGTERM; SIGHUP retries at once every record
+waiting after a failure. Each record is checked and updated
 independently, so a failure in one zone or account does not hold up the
-others; a failed record is retried on the next cycle.
+others. A failed record is retried after a wait that doubles with each
+failure in a row, up to 64 cadences.
 .PP
 It normally runs as
 .BR manannan.service ,
-which reads the configuration from
-.I @CMAKE_INSTALL_FULL_SYSCONFDIR@/manannan/manannan.yaml
-and the environment from
-.IR @CMAKE_INSTALL_FULL_SYSCONFDIR@/manannan/environment .
+as the
+.B manannan
+system user.
 .SH OPTIONS
+.TP
+.BI \-\-config " file"
+The configuration; by default
+.IR @CMAKE_INSTALL_FULL_SYSCONFDIR@/manannan/config.yaml .
+.TP
+.BI \-\-secrets " file"
+The secrets, merged over the configuration, which must be readable by their
+owner only; by default
+.I @CMAKE_INSTALL_FULL_SYSCONFDIR@/manannan/secrets.yaml
+when it exists.
+.TP
+.BI \-\- setting " value"
+Overrides a setting: the dotted path with
+.B .
+and
+.B _
+written as
+.BR \- ,
+so
+.B log.level
+is
+.BR \-\-log\-level .
+Also written
+.BI \-\- setting = value\fR.
 .TP
 .B \-\-version
 Print the version and exit.
+.TP
+.B migrate
+Convert a 0.3 installation's
+.I manannan.yaml
+and environment file into
+.I config.yaml
+and
+.I secrets.yaml
+(mode 0600).
 .SH CONFIGURATION
 The
 .B manannan
 block sets
 .B cadence
 (an integer and one of ms, s, m or h),
-.B log_level
-(debug, info, warn or error),
 .B source
 (one source plugin),
 .B registries
 (a list of registry plugins) and
 .B plugin_directories
-(directories scanned for plugins). Each plugin reads its own block at
+(directories scanned for plugins). The
+.B log
+block sets
+.B level
+(all, debug, info, warn or error) and
+.B format
+(text or json). Each plugin reads its own block at
 .BI source. name
 or
 .BI registry. name\fR.
@@ -51,33 +97,38 @@ The bundled plugins are
 .B amazon_check_ip
 and
 .BR aws_route53 .
-Their settings are described in the README at
-https://github.com/tomdionysus/mannanan.
+Their settings are described in docs/configuration.md at
+https://github.com/tomdionysus/manannan.
 .SH ENVIRONMENT
 .TP
-.B LOG_LEVEL
-Overrides
-.B log_level
-when set and not empty.
+.BI MANANNAN_ SETTING
+Overrides a setting when set and not empty: the dotted path in capitals with
+.B .
+written as
+.BR _ ,
+so
+.B log.level
+is
+.BR MANANNAN_LOG_LEVEL .
+A flag overrides the environment.
 .TP
 .BR AWS_ACCESS_KEY_ID ", " AWS_SECRET_ACCESS_KEY ", " AWS_SESSION_TOKEN
 The credentials
 .B aws_route53
-uses for any record without credentials of its own.
+uses for anything its base credentials leave empty.
 .SH FILES
 .TP
-.I @CMAKE_INSTALL_FULL_SYSCONFDIR@/manannan/manannan.yaml
-The configuration, readable by the service's unprivileged user. It holds no
-secrets.
+.I @CMAKE_INSTALL_FULL_SYSCONFDIR@/manannan/config.yaml
+The configuration. It holds no secrets.
 .TP
-.I @CMAKE_INSTALL_FULL_SYSCONFDIR@/manannan/environment
-Keys for the service, readable by root only.
+.I @CMAKE_INSTALL_FULL_SYSCONFDIR@/manannan/secrets.yaml
+Keys, readable by the service's user only.
 .TP
 .I @MANANNAN_PLUGIN_DIR@
 The bundled plugins.
 .SH EXIT STATUS
-0 after a clean shutdown, 1 when the configuration or a plugin is refused,
-2 on a usage error.
+0 after a clean shutdown or a migration, 1 when the configuration, a plugin or
+a migration is refused, 2 on a usage error.
 .SH SEE ALSO
 .BR systemctl (1),
 .BR journalctl (1)

@@ -10,9 +10,9 @@ Build-Depends:
  libssl-dev,
  libgtest-dev <!nocheck>,
 Standards-Version: 4.7.0
-Homepage: https://github.com/tomdionysus/mannanan
-Vcs-Git: https://github.com/tomdionysus/mannanan.git
-Vcs-Browser: https://github.com/tomdionysus/mannanan
+Homepage: https://github.com/tomdionysus/manannan
+Vcs-Git: https://github.com/tomdionysus/manannan.git
+Vcs-Browser: https://github.com/tomdionysus/manannan
 Rules-Requires-Root: no
 
 Package: manannan
@@ -20,6 +20,7 @@ Architecture: any
 Depends:
  ${shlibs:Depends},
  ${misc:Depends},
+ systemd | systemd-standalone-sysusers | systemd-sysusers,
 Recommends:
  systemd,
 Description: plugin-based dynamic DNS updater
@@ -33,8 +34,9 @@ Description: plugin-based dynamic DNS updater
  checkip.amazonaws.com) and aws_route53 (A records in AWS Route 53, across
  any number of hosted zones and AWS accounts).
  .
- The service is installed disabled: configure /etc/manannan/manannan.yaml
- and /etc/manannan/environment, then enable manannan.service.
+ The service is installed disabled and runs as the manannan system user:
+ configure /etc/manannan/config.yaml and /etc/manannan/secrets.yaml, then
+ enable manannan.service.
 
 Package: manannan-dev
 Architecture: all
