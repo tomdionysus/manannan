@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "manannan/daemon/clock.h"
 #include "manannan/loggers/logger.h"
 #include "manannan/plugin.h"
 namespace manannan::daemon {
@@ -19,7 +20,9 @@ struct Registry {
 };
 class Service {
  public:
-  Service(SourcePlugin& source, std::vector<Registry> registries, std::chrono::milliseconds cadence, std::shared_ptr<loggers::Logger> logger);
+  Service(SourcePlugin& source, std::vector<Registry> registries, std::chrono::milliseconds cadence, Clock& clock, std::shared_ptr<loggers::Logger> logger);
+  // Reconciles at once and then every cadence until SIGINT or SIGTERM,
+  // leaving the caller's signal mask and handlers as it found them.
   int run();
   // Reads the source once and brings every record of every registry up to
   // date. A failure on one record is logged and does not affect the others.
@@ -30,6 +33,7 @@ class Service {
   SourcePlugin& _source;
   std::vector<Registry> _registries;
   std::chrono::milliseconds _cadence;
+  Clock& _clock;
   std::shared_ptr<loggers::Logger> _logger;
 };
 }  // namespace manannan::daemon

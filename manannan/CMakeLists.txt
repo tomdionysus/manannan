@@ -16,6 +16,7 @@ target_link_libraries(manannan_api INTERFACE yaml-cpp::yaml-cpp)
 # Everything but main(), so the tests drive the same code the daemon runs.
 add_library(manannan_core STATIC
   daemon/application.cpp
+  daemon/clock.cpp
   daemon/config.cpp
   daemon/duration.cpp
   daemon/plugin_loader.cpp

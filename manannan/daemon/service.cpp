@@ -6,11 +6,8 @@
 //
 #include "manannan/daemon/service.h"
 
-#include <sys/select.h>
-
 #include <cerrno>
 #include <csignal>
-#include <ctime>
 #include <stdexcept>
 #include <system_error>
 namespace manannan::daemon {
@@ -18,15 +15,10 @@ namespace {
 volatile std::sig_atomic_t shutdown_requested{};
 
 extern "C" void request_shutdown(int) { shutdown_requested = 1; }
-
-timespec to_timespec(std::chrono::steady_clock::duration duration) {
-  const auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(duration);
-  const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(nanoseconds);
-  return {static_cast<std::time_t>(seconds.count()), static_cast<long>((nanoseconds - seconds).count())};
-}
 }  // namespace
-Service::Service(SourcePlugin& source, std::vector<Registry> registries, std::chrono::milliseconds cadence, std::shared_ptr<loggers::Logger> logger)
-    : _source(source), _registries(std::move(registries)), _cadence(cadence), _logger(std::move(logger)) {}
+Service::Service(SourcePlugin& source, std::vector<Registry> registries, std::chrono::milliseconds cadence, Clock& clock,
+                 std::shared_ptr<loggers::Logger> logger)
+    : _source(source), _registries(std::move(registries)), _cadence(cadence), _clock(clock), _logger(std::move(logger)) {}
 std::size_t Service::reconcile() {
   _logger->debug("loading value from source");
   const auto desired = _source.get_value();
@@ -63,8 +55,8 @@ int Service::run() {
   if (sigaction(SIGINT, &action, &previous_interrupt) < 0 || sigaction(SIGTERM, &action, &previous_terminate) < 0)
     throw std::system_error(errno, std::generic_category());  // LCOV_EXCL_LINE
 
-  // The shutdown signals are blocked except inside pselect, so one that
-  // arrives between the flag check and the wait still ends the wait.
+  // The shutdown signals are blocked except inside the clock's wait, so one
+  // that arrives between the flag check and the wait still ends the wait.
   sigset_t shutdown_signals;
   sigemptyset(&shutdown_signals);
   sigaddset(&shutdown_signals, SIGINT);
@@ -87,20 +79,19 @@ int Service::run() {
   };
   attempt();
 
-  auto next_run = std::chrono::steady_clock::now() + _cadence;
-  while (!shutdown_requested) {
-    const auto now = std::chrono::steady_clock::now();
-    if (now >= next_run) {
-      attempt();
-      next_run = std::chrono::steady_clock::now() + _cadence;
-      continue;
+  auto next_run = _clock.now() + _cadence;
+  try {
+    while (!shutdown_requested) {
+      if (_clock.now() >= next_run) {
+        attempt();
+        next_run = _clock.now() + _cadence;
+        continue;
+      }
+      _clock.wait_until(next_run, wait_mask);
     }
-    const auto timeout = to_timespec(next_run - now);
-    if (pselect(0, nullptr, nullptr, nullptr, &timeout, &wait_mask) < 0 && errno != EINTR) {
-      const auto error = errno;                                 // LCOV_EXCL_LINE
-      restore();                                                // LCOV_EXCL_LINE
-      throw std::system_error(error, std::generic_category());  // LCOV_EXCL_LINE
-    }
+  } catch (...) {
+    restore();
+    throw;
   }
   restore();
   _logger->info("shutting down");

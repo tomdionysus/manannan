@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <utility>
 
+#include "manannan/daemon/clock.h"
 #include "manannan/daemon/config.h"
 #include "manannan/daemon/plugin_loader.h"
 #include "manannan/daemon/service.h"
@@ -45,7 +46,8 @@ int run_application(const std::vector<std::string>& arguments, std::shared_ptr<l
       registries.push_back({name, registry});
     }
     logger->info("Manannan " + std::string(version) + " started");
-    return Service(source, std::move(registries), config.cadence, logger).run();
+    SystemClock clock;
+    return Service(source, std::move(registries), config.cadence, clock, logger).run();
   } catch (const std::exception& error) {
     logger->error(error.what());
     return 1;
