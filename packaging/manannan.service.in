@@ -14,6 +14,9 @@ Wants=network-online.target
 Type=simple
 # secrets.yaml beside the configuration is read when it exists.
 ExecStart=@CMAKE_INSTALL_FULL_BINDIR@/manannan --config @CMAKE_INSTALL_FULL_SYSCONFDIR@/manannan/config.yaml
+# Reload retries every waiting or parked record at once; it does not reread
+# the configuration (restart for that).
+ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=10s
 UMask=0077

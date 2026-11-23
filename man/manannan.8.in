@@ -19,9 +19,11 @@ manannan \- plugin-based dynamic DNS updater
 reads a value from a source plugin, typically the host's public IP address,
 and reconciles it with every record held by one or more registry plugins,
 typically DNS providers. It repeats on the cadence the configuration sets
-until it receives SIGINT or SIGTERM. Each record is checked and updated
+until it receives SIGINT or SIGTERM; SIGHUP retries at once every record
+waiting after a failure. Each record is checked and updated
 independently, so a failure in one zone or account does not hold up the
-others; a failed record is retried on the next cycle.
+others. A failed record is retried after a wait that doubles with each
+failure in a row, up to 64 cadences.
 .PP
 It normally runs as
 .BR manannan.service ,

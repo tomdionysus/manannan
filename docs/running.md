@@ -30,8 +30,26 @@ With `log.format: json` each line is a JSON object with `time`, `level` and
 
 Configuration errors stop startup with a message naming the offending setting:
 unknown keys, duplicate records, missing zones and incomplete credentials are
-all rejected. Runtime failures, such as a provider returning an error or a
-network timeout, are logged against the record and retried on the next cycle.
+all rejected.
+
+Runtime failures, such as a provider returning an error or a network timeout,
+are logged against the record (or the source) with when it will be tried
+again. Each failure in a row doubles the wait, from one cadence up to 64. After
+8 failures in a row the record is parked, which the log says once:
+
+```
+[ERROR] aws_route53:home.example.com: Route 53 returned HTTP 403: ...; parked after 8 failures: retrying every 5h20m, when the value changes, or at once on SIGHUP
+```
+
+A parked record is still tried every 64 cadences, and at once when the
+address changes, so it recovers on its own. To try every waiting record now,
+after fixing the cause:
+
+```sh
+sudo systemctl reload manannan
+```
+
+A record that succeeds again logs that it recovered.
 
 For a full trace without editing the configuration:
 

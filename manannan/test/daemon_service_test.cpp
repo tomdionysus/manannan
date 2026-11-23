@@ -201,6 +201,140 @@ TEST(Service, AFailedWaitRestoresSignalStateAndPropagates) {
   expect_restored(before, SIGTERM);
 }
 
+TEST(Service, DescribesDurationsForTheLog) {
+  using manannan::daemon::describe;
+  EXPECT_EQ(describe(5min), "5m");
+  EXPECT_EQ(describe(320min), "5h20m");
+  EXPECT_EQ(describe(90s), "1m30s");
+  EXPECT_EQ(describe(1500ms), "1s500ms");
+  EXPECT_EQ(describe(0ms), "0ms");
+}
+
+TEST(Service, BacksOffDoublingUpTo64Cadences) {
+  auto logger = std::make_shared<RecordingLogger>();
+  FakeSource source;
+  FakeRegistry dns;
+  FakeClock clock;
+  Service service(source, {{"dns", &dns}}, 5min, clock, logger);
+  EXPECT_EQ(service.backoff(1), 5min);
+  EXPECT_EQ(service.backoff(2), 10min);
+  EXPECT_EQ(service.backoff(7), 320min);
+  EXPECT_EQ(service.backoff(8), 320min);
+  EXPECT_EQ(service.backoff(100), 320min);
+  Service huge(source, {}, std::chrono::milliseconds::max() / 2, clock, logger);
+  EXPECT_EQ(huge.backoff(5), std::chrono::milliseconds::max() / 2);  // never stretched past what time can hold
+}
+
+// A registry whose one record fails until told otherwise, counting lookups.
+class FlakyRegistry final : public manannan::RegistryPlugin {
+ public:
+  std::vector<std::string> records() const override { return {"a.example.com"}; }
+  std::string get_value(const std::string&) override {
+    ++lookups;
+    if (failing) throw std::runtime_error("refused");
+    return value;
+  }
+  void set_value(const std::string&, const std::string& to) override { value = to; }
+  bool failing = true;
+  int lookups = 0;
+  std::string value;
+};
+
+TEST(Service, AFailingRecordWaitsLongerEachTimeAndParksAtTheBudget) {
+  auto logger = std::make_shared<RecordingLogger>();
+  FakeSource source;
+  FlakyRegistry dns;
+  FakeClock clock;
+  Service service(source, {{"dns", &dns}}, 5min, clock, logger);
+
+  // Each failure n is retried backoff(n) later, and not before.
+  for (unsigned failure = 1; failure <= Service::retry_budget; ++failure) {
+    EXPECT_EQ(service.reconcile(), 1u);
+    EXPECT_EQ(dns.lookups, static_cast<int>(failure));
+    clock.advance(service.backoff(failure) - 1min);
+    EXPECT_EQ(service.reconcile(), 0u);  // still waiting
+    EXPECT_EQ(dns.lookups, static_cast<int>(failure));
+    clock.advance(1min);
+  }
+  const auto errors = logger->at(manannan::loggers::ERROR);
+  ASSERT_EQ(errors.size(), Service::retry_budget);
+  EXPECT_TRUE(contains(errors[0], "dns:a.example.com: refused; retrying in 5m")) << errors[0];
+  EXPECT_TRUE(contains(errors[1], "retrying in 10m")) << errors[1];
+  EXPECT_TRUE(contains(errors.back(), "parked after 8 failures: retrying every 5h20m, when the value changes, or at once on SIGHUP")) << errors.back();
+  EXPECT_TRUE(logger->logged(manannan::loggers::DEBUG, "dns:a.example.com waits for its retry"));
+
+  // Parked, it is still tried every 64 cadences; a new value tries it at once.
+  EXPECT_EQ(service.reconcile(), 1u);
+  EXPECT_EQ(dns.lookups, 9);
+  EXPECT_TRUE(contains(logger->at(manannan::loggers::ERROR).back(), "retrying in 5h20m"));
+  clock.advance(5min);
+  EXPECT_EQ(service.reconcile(), 0u);
+  EXPECT_EQ(dns.lookups, 9);
+  source.value = "192.0.2.99";
+  dns.failing = false;
+  EXPECT_EQ(service.reconcile(), 0u);
+  EXPECT_EQ(dns.lookups, 10);
+  EXPECT_EQ(dns.value, "192.0.2.99");
+  EXPECT_TRUE(logger->logged(manannan::loggers::INFO, "dns:a.example.com recovered after 9 failures"));
+
+  // Recovered, it is tried every cycle again.
+  EXPECT_EQ(service.reconcile(), 0u);
+  EXPECT_EQ(dns.lookups, 11);
+}
+
+TEST(Service, AFailingSourceBacksOffTheWholeCycle) {
+  auto logger = std::make_shared<RecordingLogger>();
+  // Fails on calls 2, 3 and 4, recovers on 5, and the signal on 6 ends the run.
+  class FailingSource final : public manannan::SourcePlugin {
+   public:
+    std::string get_value() override {
+      ++calls;
+      if (calls == 6) ::raise(SIGTERM);
+      if (calls >= 2 && calls <= 4) throw std::runtime_error("source down");
+      return "192.0.2.10";
+    }
+    int calls = 0;
+  } source;
+  FakeRegistry dns;
+  dns.values = {{"a.example.com", ""}};
+  FakeClock clock;
+  const auto start = clock.now();
+  Service service(source, {{"dns", &dns}}, 5min, clock, logger);
+  EXPECT_EQ(service.run(), 0);
+  EXPECT_EQ(clock.deadlines, (std::vector<FakeClock::time_point>{start + 5min, start + 10min, start + 20min, start + 40min, start + 45min, start + 50min}));
+  EXPECT_TRUE(logger->logged(manannan::loggers::ERROR, "source down; retrying in 10m"));
+  EXPECT_TRUE(logger->logged(manannan::loggers::INFO, "the source recovered after 3 failures"));
+}
+
+TEST(Service, SighupRetriesEverythingAtOnce) {
+  const SignalState before(SIGHUP);
+  auto logger = std::make_shared<RecordingLogger>();
+  // The second cycle raises SIGHUP; the third raises SIGTERM.
+  class SignallingSource final : public manannan::SourcePlugin {
+   public:
+    std::string get_value() override {
+      ++calls;
+      if (calls == 2) ::raise(SIGHUP);
+      if (calls == 3) ::raise(SIGTERM);
+      return "192.0.2.10";
+    }
+    int calls = 0;
+  } source;
+  FlakyRegistry dns;
+  FakeClock clock;
+  const auto start = clock.now();
+  Service service(source, {{"dns", &dns}}, 5min, clock, logger);
+  EXPECT_EQ(service.run(), 0);
+  // Cycles 1 (at 0) and 2 (at 5m) fail the record, which would then wait until
+  // 15m; the SIGHUP raised in cycle 2 makes cycle 3, at 10m, try it anyway.
+  EXPECT_EQ(source.calls, 3);
+  EXPECT_EQ(dns.lookups, 3);
+  EXPECT_TRUE(logger->logged(manannan::loggers::INFO, "SIGHUP: retrying every record now"));
+  EXPECT_EQ(clock.deadlines.size(), 3u);
+  EXPECT_EQ(clock.deadlines[0], start + 5min);
+  expect_restored(before, SIGHUP);
+}
+
 TEST(SystemClock, ReturnsAtOnceForADeadlineThatHasPassed) {
   SystemClock clock;
   sigset_t mask;
