@@ -24,6 +24,7 @@ add_executable(manannan_tests
   daemon_application_test.cpp
   daemon_config_test.cpp
   daemon_duration_test.cpp
+  daemon_migrate_test.cpp
   daemon_plugin_loader_test.cpp
   daemon_service_test.cpp
   loggers_logger_test.cpp

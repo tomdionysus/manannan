@@ -1,0 +1,8 @@
+#
+# Manannan - plugin-based dynamic DNS updater
+#
+# Copyright (C) 2026 Tom Cully <mail@tomcully.com>
+# Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
+#
+# The system user the service runs as. It owns secrets.yaml and nothing else.
+u manannan - "Manannan dynamic DNS updater" - -

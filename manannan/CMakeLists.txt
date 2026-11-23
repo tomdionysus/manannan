@@ -19,12 +19,15 @@ add_library(manannan_core STATIC
   daemon/clock.cpp
   daemon/config.cpp
   daemon/duration.cpp
+  daemon/migrate.cpp
   daemon/plugin_loader.cpp
   daemon/service.cpp
   loggers/logger_scoped.cpp
   loggers/logger_stdio.cpp
   loggers/util.cpp)
 target_include_directories(manannan_core PUBLIC ${PROJECT_SOURCE_DIR})
+target_compile_definitions(manannan_core PRIVATE MANANNAN_DEFAULT_CONFIG="${CMAKE_INSTALL_FULL_SYSCONFDIR}/manannan/config.yaml"
+                                                 MANANNAN_DEFAULT_SECRETS="${CMAKE_INSTALL_FULL_SYSCONFDIR}/manannan/secrets.yaml")
 target_link_libraries(manannan_core PUBLIC manannan_api ${CMAKE_DL_LIBS} PRIVATE manannan_warnings)
 
 add_executable(manannan daemon/main.cpp)

@@ -53,30 +53,32 @@ add_subdirectory(manannan core)
 # same install directories so they agree on every prefix and libdir layout.
 set(MANANNAN_PLUGIN_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR}/manannan/plugins)
 set(MANANNAN_PLUGIN_DIR ${CMAKE_INSTALL_FULL_LIBDIR}/manannan/plugins)
-configure_file(config/manannan.yaml.in manannan.yaml @ONLY)
+configure_file(config/config.yaml.in config.yaml @ONLY)
 configure_file(man/manannan.8.in manannan.8 @ONLY)
 
 add_subdirectory(plugins)
 
-install(TARGETS manannan RUNTIME DESTINATION ${CMAKE_INSTALL_SBINDIR})
+install(TARGETS manannan RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/manannan.8 DESTINATION ${CMAKE_INSTALL_MANDIR}/man8)
 install(DIRECTORY manannan/include/manannan DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} PATTERN "*.in" EXCLUDE)
 install(FILES ${PROJECT_BINARY_DIR}/generated/manannan/version.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/manannan)
-# Never overwrite an existing configuration: it holds the site's records and
-# credentials. The template is installed only on a fresh install.
+# Never overwrite an existing configuration: it holds the site's records. The
+# template is installed only on a fresh install. The secrets file is never
+# installed: the package's postinst creates it, and a source install by hand.
 install(CODE "
-  set(manannan_config \"\$ENV{DESTDIR}${CMAKE_INSTALL_FULL_SYSCONFDIR}/manannan/manannan.yaml\")
+  set(manannan_config \"\$ENV{DESTDIR}${CMAKE_INSTALL_FULL_SYSCONFDIR}/manannan/config.yaml\")
   if(EXISTS \"\${manannan_config}\")
     message(STATUS \"Keeping existing configuration: \${manannan_config}\")
   else()
     # file(INSTALL) applies DESTDIR itself.
-    file(INSTALL \"${CMAKE_CURRENT_BINARY_DIR}/manannan.yaml\"
+    file(INSTALL \"${CMAKE_CURRENT_BINARY_DIR}/config.yaml\"
          DESTINATION \"${CMAKE_INSTALL_FULL_SYSCONFDIR}/manannan\")
   endif()")
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   configure_file(packaging/manannan.service.in manannan.service @ONLY)
-  # systemd reads units from <prefix>/lib/systemd/system, never lib64 or a multiarch libdir.
+  # systemd reads units and sysusers.d from <prefix>/lib, never lib64 or a multiarch libdir.
   install(FILES ${CMAKE_CURRENT_BINARY_DIR}/manannan.service DESTINATION lib/systemd/system)
+  install(FILES packaging/manannan.sysusers DESTINATION lib/sysusers.d RENAME manannan.conf)
 endif()
 
 if(MANANNAN_BUILD_TESTING)

@@ -5,7 +5,8 @@
 // Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
 //
 // The loggers: the standard-stream logger's levels, streams and line format,
-// and the scoped logger's prefix and forwarding.
+// as text or JSON with every string escaped, and the scoped logger's prefix
+// and forwarding.
 
 #include <gtest/gtest.h>
 
@@ -22,6 +23,7 @@
 namespace {
 using manannan::loggers::LoggerScoped;
 using manannan::loggers::LoggerStdIO;
+using manannan::test::contains;
 using manannan::test::RecordingLogger;
 
 // Captures std::cout and std::cerr for the life of the object.
@@ -70,6 +72,23 @@ TEST(Logger, StdioDropsLevelsBelowItsThreshold) {
   EXPECT_EQ(streams.captured_out.str(), "");
   EXPECT_NE(streams.captured_err.str().find("shown"), std::string::npos);
 }
+
+TEST(Logger, StdioWritesJsonLinesWhenAsked) {
+  CapturedStreams streams;
+  LoggerStdIO logger(manannan::loggers::INFO, manannan::loggers::LogFormat::json);
+  logger.info("said \"hi\"\\\n\t\x01");
+  logger.raw("r");
+  logger.error("e");
+  logger.set_format(manannan::loggers::LogFormat::text);
+  logger.warn("plain");
+  const auto out = streams.captured_out.str();
+  EXPECT_TRUE(std::regex_search(out, std::regex(R"(^\{"time":"[0-9T:Z-]+","level":"info","message":"said \\"hi\\"\\\\\\n\\t\\u0001"\}\n)"))) << out;
+  EXPECT_TRUE(contains(out, "\"level\":\"raw\",\"message\":\"r\"}"));
+  EXPECT_TRUE(std::regex_search(out, std::regex(R"(Z \[WARN \] plain\n)")));
+  EXPECT_TRUE(contains(streams.captured_err.str(), "\"level\":\"error\",\"message\":\"e\"}"));
+}
+
+TEST(Logger, JsonStringsEscapeQuotesBackslashesAndControls) { EXPECT_EQ(manannan::loggers::json_string("a\"b\\c\rd\x1f"), "\"a\\\"b\\\\c\\rd\\u001f\""); }
 
 TEST(Logger, ScopedPrefixesAndForwards) {
   auto base = std::make_shared<RecordingLogger>();

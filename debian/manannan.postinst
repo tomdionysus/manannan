@@ -5,27 +5,49 @@
 # Copyright (C) 2026 Tom Cully <mail@tomcully.com>
 # Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
 #
-# manannan postinst: the environment file that holds the provider's keys,
-# readable by root only (systemd reads it before the service drops to its
-# dynamic user). It is not a conffile: it is the site's, never the package's.
+# manannan postinst: the manannan system user; on an upgrade from 0.3, the
+# migration of manannan.yaml and the environment file to config.yaml and
+# secrets.yaml (before the service restarts below); and secrets.yaml, owned
+# by the service's user and readable by it alone. secrets.yaml is not a
+# conffile: it is the site's, never the package's.
 
 set -e
 
-ENVIRONMENT=/etc/manannan/environment
+CONF=/etc/manannan
+SECRETS=$CONF/secrets.yaml
+OLD=$CONF/manannan.yaml.pre-0.4.0
 
 case "$1" in
     configure)
-        if [ ! -e "$ENVIRONMENT" ]; then
-            (umask 077 && : >"$ENVIRONMENT")
+        systemd-sysusers manannan.conf
+        if [ -e "$OLD" ]; then
+            if manannan migrate "$OLD" "$CONF/environment" "$CONF/config.yaml" "$SECRETS"; then
+                rm -f "$OLD" "$CONF/environment"
+                MIGRATED=yes
+            else
+                echo "manannan: the 0.3 configuration was not migrated; $OLD and $CONF/environment are kept." >&2
+                echo "manannan: fix what is named above, then: manannan migrate $OLD $CONF/environment $CONF/config.yaml $SECRETS" >&2
+            fi
         fi
+        if [ ! -e "$SECRETS" ]; then
+            (umask 077 && echo "# Manannan's secrets, merged over config.yaml. Readable by its owner only." >"$SECRETS")
+        fi
+        chown manannan:manannan "$SECRETS"
+        chmod 600 "$SECRETS"
         ;;
 esac
 
 #DEBHELPER#
 
+# dpkg keeps the retired manannan.yaml as .dpkg-bak in the section above; once
+# migrated it holds nothing the new files lack.
+if [ "${MIGRATED:-}" = yes ]; then
+    rm -f "$CONF/manannan.yaml.dpkg-bak"
+fi
+
 if [ "$1" = "configure" ] && [ -z "${2:-}" ]; then
-    echo "manannan is installed and disabled. Set the records in /etc/manannan/manannan.yaml"
-    echo "and the keys in $ENVIRONMENT, then: systemctl enable --now manannan"
+    echo "manannan is installed and disabled. Set the records in $CONF/config.yaml"
+    echo "and the keys in $SECRETS, then: systemctl enable --now manannan"
 fi
 
 exit 0

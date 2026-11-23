@@ -55,22 +55,24 @@ paths, so they stay consistent under any prefix or libdir layout.
 
 | Installed | Path (default prefix) |
 | --- | --- |
-| Daemon | `/usr/local/sbin/manannan` |
+| Daemon | `/usr/local/bin/manannan` |
 | Manual page | `/usr/local/share/man/man8/manannan.8` |
 | Plugins | `/usr/local/lib/manannan/plugins` (`lib64` on RPM-based distributions) |
-| Configuration | `/usr/local/etc/manannan/manannan.yaml` |
-| Keys (you create them) | `/usr/local/etc/manannan/environment` |
+| Configuration | `/usr/local/etc/manannan/config.yaml` |
+| Secrets (you create them) | `/usr/local/etc/manannan/secrets.yaml` |
 | systemd unit | `/usr/local/lib/systemd/system/manannan.service` |
+| System user | `/usr/local/lib/sysusers.d/manannan.conf` |
 | Plugin headers | `/usr/local/include/manannan` |
 
-Reinstalling never overwrites an existing `manannan.yaml`.
+Reinstalling never overwrites an existing `config.yaml`.
 
 Configure as in [configuration.md](configuration.md), using these paths.
-The keys file is not created for you; make it root-only:
+Create the service's user, and the secrets file readable by it alone:
 
 ```sh
-sudo install -m 600 /dev/null /usr/local/etc/manannan/environment
-sudoedit /usr/local/etc/manannan/environment
+sudo systemd-sysusers /usr/local/lib/sysusers.d/manannan.conf
+sudo install -m 600 -o manannan -g manannan /dev/null /usr/local/etc/manannan/secrets.yaml
+sudoedit /usr/local/etc/manannan/secrets.yaml
 ```
 
 Then start the service:
@@ -87,19 +89,20 @@ To upgrade, `git pull`, rebuild, run the tests and reinstall as above, then
 
 ```sh
 sudo systemctl disable --now manannan
-sudo rm /usr/local/sbin/manannan /usr/local/lib/systemd/system/manannan.service /usr/local/share/man/man8/manannan.8
+sudo rm /usr/local/bin/manannan /usr/local/lib/systemd/system/manannan.service /usr/local/share/man/man8/manannan.8
+sudo rm /usr/local/lib/sysusers.d/manannan.conf
 sudo rm -rf /usr/local/lib*/manannan /usr/local/include/manannan /usr/local/etc/manannan
 sudo systemctl daemon-reload
 ```
 
-The last `rm` also removes the configuration and the keys.
+The last `rm` also removes the configuration and the secrets.
 
 ## Moving a source install to the package
 
 The unit under `/usr/local/lib/systemd/system` overrides the package's, so the
 source install has to go first.
 
-1. Keep a copy of the configuration and keys:
+1. Keep a copy of the configuration and secrets:
 
    ```sh
    sudo cp -a /usr/local/etc/manannan /root/manannan-backup
@@ -107,14 +110,14 @@ source install has to go first.
 
 2. Uninstall the source install as above, then install the package (see the
    [README](../README.md#install)).
-3. Copy the old configuration into `/etc/manannan/manannan.yaml`, changing
+3. Copy the old configuration into `/etc/manannan/config.yaml`, changing
    `plugin_directories` to the packaged path (the one in the packaged file,
    such as `/usr/lib/aarch64-linux-gnu/manannan/plugins`). With the old path
    Manannan finds no plugins and does not start.
-4. Copy the keys, keeping them root-only:
+4. Copy the secrets over the package's, keeping their owner and mode:
 
    ```sh
-   sudo install -m 600 /root/manannan-backup/environment /etc/manannan/environment
+   sudo install -m 600 -o manannan -g manannan /root/manannan-backup/secrets.yaml /etc/manannan/secrets.yaml
    ```
 
 5. `sudo systemctl enable --now manannan` and check `journalctl -u manannan`.

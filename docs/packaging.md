@@ -1,7 +1,8 @@
 # Packaging
 
 Manannan is packaged for Debian trixie as `manannan` (the daemon, the bundled
-plugins, the configuration, the systemd unit and the manual page),
+plugins, the configuration, the systemd unit, the system user and the manual
+page),
 `manannan-dev` (the plugin headers) and `manannan-dbgsym`. The packages are
 built with debhelper from `debian/`, driving the CMake build; the CMake install
 rules decide where every file goes.
@@ -45,10 +46,17 @@ new version.
 
 ## What the packages do
 
-- The configuration is a conffile, so an upgrade keeps local changes and asks
-  before replacing a changed file.
-- The postinst creates `/etc/manannan/environment`, mode 0600, if it does not
-  exist. It holds the keys and is never part of the package.
+- The configuration, `/etc/manannan/config.yaml`, is a conffile, so an upgrade
+  keeps local changes and asks before replacing a changed file.
+- The postinst creates the `manannan` system user (from
+  `/usr/lib/sysusers.d/manannan.conf`) and `/etc/manannan/secrets.yaml`, owned
+  by that user and mode 0600, if it does not exist. It holds the keys and is
+  never part of the package.
+- On an upgrade from 0.3, the preinst keeps a copy of `manannan.yaml` before
+  dpkg retires that conffile, and the postinst runs `manannan migrate` to turn
+  it and `/etc/manannan/environment` into `config.yaml` and `secrets.yaml`,
+  before the service restarts. If the migration is refused, the old files are
+  kept and the reason is printed.
 - The service is installed disabled and not started, since the packaged
   configuration is an example. An upgrade restarts it if it is enabled or
   running.

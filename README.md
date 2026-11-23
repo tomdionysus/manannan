@@ -24,7 +24,7 @@ Elsewhere, build from source: see [docs/building.md](docs/building.md).
 
 ## Set up
 
-1. List your records in `/etc/manannan/manannan.yaml`, under
+1. List your records in `/etc/manannan/config.yaml`, under
    `registry.aws_route53.records`:
 
    ```yaml
@@ -36,12 +36,15 @@ Elsewhere, build from source: see [docs/building.md](docs/building.md).
 2. Add an AWS access key that may update those zones:
 
    ```sh
-   sudoedit /etc/manannan/environment
+   sudoedit /etc/manannan/secrets.yaml
    ```
 
-   ```
-   AWS_ACCESS_KEY_ID=AKIA...
-   AWS_SECRET_ACCESS_KEY=...
+   ```yaml
+   registry:
+     aws_route53:
+       credentials:
+         access_key_id: AKIA...
+         secret_access_key: ...
    ```
 
 3. Start it:
@@ -58,7 +61,7 @@ journalctl -u manannan -f
 
 ```
 [INFO ] managing aws_route53:home.example.com
-[INFO ] Manannan 0.3.0 started
+[INFO ] Manannan 0.4.0 started
 [INFO ] set aws_route53:home.example.com to 203.0.113.7
 ```
 

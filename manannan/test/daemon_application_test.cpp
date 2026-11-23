@@ -4,10 +4,12 @@
 // Copyright (C) 2026 Tom Cully <mail@tomcully.com>
 // Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
 //
-// The daemon end to end: usage and --version, refusal of a bad configuration
-// or a registry with no records, a full run of the bundled plugins against
-// local check IP and Route 53 endpoints until SIGTERM, and the executable's
-// arguments, streams and exit status.
+// The daemon end to end: usage and --version, refusal of a bad configuration,
+// an unknown setting or a registry with no records, the migrate command, a
+// full run of the bundled plugins against local check IP and Route 53
+// endpoints until SIGTERM with the keys from a secrets file and a setting
+// from a flag, and the executable's arguments, streams, exit status and JSON
+// log format.
 
 #include <gtest/gtest.h>
 #include <pthread.h>
@@ -16,9 +18,11 @@
 #include <unistd.h>
 
 #include <csignal>
+#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <regex>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -53,7 +57,8 @@ struct Outcome {
 };
 
 Outcome run(const std::vector<std::string>& arguments) {
-  ScopedEnvironment level("LOG_LEVEL", std::nullopt);
+  ScopedEnvironment level("MANANNAN_LOG_LEVEL", std::nullopt);
+  ScopedEnvironment format("MANANNAN_LOG_FORMAT", std::nullopt);
   auto logger = std::make_shared<RecordingLogger>();
   std::ostringstream out;
   std::ostringstream err;
@@ -61,7 +66,16 @@ Outcome run(const std::vector<std::string>& arguments) {
   return {status, out.str(), err.str(), logger};
 }
 
-std::string configuration(const std::string& body) { return write_file(work_directory("application") / "manannan.yaml", body).string(); }
+std::string configuration(const std::string& body) { return write_file(work_directory("application") / "config.yaml", body).string(); }
+
+std::string secrets(const std::string& body) {
+  const auto path = write_file(work_directory("application-secrets") / "secrets.yaml", body);
+  std::filesystem::permissions(path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write, std::filesystem::perm_options::replace);
+  return path.string();
+}
+
+const std::string no_records = "manannan:\n  cadence: 1s\n  source: test_source\n  registries: [test_registry]\n  plugin_directories: [" +
+                               (test_plugin_dir / "good").string() + "]\nsource:\n  test_source: {value: x}\nregistry:\n  test_registry: {records: []}\n";
 
 TEST(Application, PrintsItsVersion) {
   const auto outcome = run({"--version"});
@@ -69,28 +83,46 @@ TEST(Application, PrintsItsVersion) {
   EXPECT_EQ(outcome.out, std::string("manannan ") + manannan::version + "\n");
 }
 
-TEST(Application, NeedsExactlyOneArgument) {
-  for (const auto& arguments : {std::vector<std::string>{}, std::vector<std::string>{"a.yaml", "b.yaml"}}) {
+TEST(Application, RefusesArgumentsItDoesNotTake) {
+  for (const auto& arguments : {std::vector<std::string>{"a.yaml"}, std::vector<std::string>{"--config"}, std::vector<std::string>{"--"},
+                                std::vector<std::string>{"migrate", "a", "b"}}) {
     const auto outcome = run(arguments);
     EXPECT_EQ(outcome.status, 2);
-    EXPECT_TRUE(contains(outcome.err, "usage: manannan <config.yaml>"));
+    EXPECT_TRUE(contains(outcome.err, "usage: manannan [--config <config.yaml>]"));
   }
 }
 
 TEST(Application, RefusesAConfigurationItCannotUse) {
-  const auto outcome = run({(work_directory("application") / "absent.yaml").string()});
-  EXPECT_EQ(outcome.status, 1);
-  EXPECT_EQ(outcome.logger->at(manannan::loggers::ERROR).size(), 1u);
+  for (const auto& arguments : {std::vector<std::string>{"--config", (work_directory("application") / "absent.yaml").string()},
+                                std::vector<std::string>{"--config=" + configuration(no_records), "--no-such-setting", "1"}}) {
+    const auto outcome = run(arguments);
+    EXPECT_EQ(outcome.status, 1);
+    EXPECT_EQ(outcome.logger->at(manannan::loggers::ERROR).size(), 1u);
+  }
 }
 
 TEST(Application, RefusesARegistryWithNoRecords) {
-  const auto outcome =
-      run({configuration("manannan:\n  cadence: 1s\n  log_level: debug\n  source: test_source\n"
-                         "  registries: [test_registry]\n  plugin_directories: [" +
-                         (test_plugin_dir / "good").string() + "]\nsource:\n  test_source: {value: x}\nregistry:\n  test_registry: {records: []}\n")});
+  const auto outcome = run({"--config", configuration(no_records), "--log-level", "debug"});
   EXPECT_EQ(outcome.status, 1);
   EXPECT_TRUE(outcome.logger->logged(manannan::loggers::ERROR, "registry test_registry has no records configured"));
   EXPECT_EQ(outcome.logger->level, manannan::loggers::DEBUG);
+}
+
+TEST(Application, MigratesA03Installation) {
+  const auto directory = work_directory("application-migrate");
+  write_file(directory / "manannan.yaml", "manannan:\n  cadence: 5m\n  log_level: debug\n");
+  write_file(directory / "environment", "AWS_SECRET_ACCESS_KEY=s\n");
+  const auto paths = std::vector<std::string>{(directory / "manannan.yaml").string(), (directory / "environment").string(),
+                                              (directory / "config.yaml").string(), (directory / "secrets.yaml").string()};
+  auto outcome = run({"migrate", paths[0], paths[1], paths[2], paths[3]});
+  EXPECT_EQ(outcome.status, 0) << outcome.err;
+  EXPECT_TRUE(contains(outcome.out, "migrated"));
+  EXPECT_TRUE(std::filesystem::exists(paths[3]));
+
+  write_file(directory / "environment", "OTHER=1\n");
+  outcome = run({"migrate", paths[0], paths[1], paths[2], paths[3]});
+  EXPECT_EQ(outcome.status, 1);
+  EXPECT_TRUE(contains(outcome.err, "manannan migrate: ")) << outcome.err;
 }
 
 TEST(Application, PublishesTheAddressUntilSignalled) {
@@ -120,13 +152,14 @@ TEST(Application, PublishesTheAddressUntilSignalled) {
                                                       "</ResourceRecordSet>"};
   });
 
-  const auto outcome =
-      run({configuration("manannan:\n  cadence: 10ms\n  source: amazon_check_ip\n  registries: [aws_route53]\n"
-                         "  plugin_directories: [" +
-                         check_ip_plugin_dir.string() + ", " + route53_plugin_dir.string() + "]\nsource:\n  amazon_check_ip:\n    endpoint: " + check_ip.url() +
-                         "\nregistry:\n  aws_route53:\n    endpoint: " + route53.url() +
-                         "\n    credentials: {access_key_id: AKID, secret_access_key: secret}\n"
-                         "    records:\n      - {name: home.example.com, hosted_zone_id: Z1}\n")});
+  // The keys come from the secrets file; the cadence from a flag.
+  const auto outcome = run(
+      {"--config",
+       configuration("manannan:\n  cadence: 5m\n  source: amazon_check_ip\n  registries: [aws_route53]\n"
+                     "  plugin_directories: [" +
+                     check_ip_plugin_dir.string() + ", " + route53_plugin_dir.string() + "]\nsource:\n  amazon_check_ip:\n    endpoint: " + check_ip.url() +
+                     "\nregistry:\n  aws_route53:\n    endpoint: " + route53.url() + "\n    records:\n      - {name: home.example.com, hosted_zone_id: Z1}\n"),
+       "--secrets", secrets("registry:\n  aws_route53:\n    credentials: {access_key_id: AKID, secret_access_key: secret}\n"), "--manannan-cadence=10ms"});
 
   EXPECT_EQ(outcome.status, 0);
   EXPECT_EQ(registered, "203.0.113.7");
@@ -172,14 +205,22 @@ std::pair<int, std::string> run_daemon(const std::vector<std::string>& arguments
 
 TEST(Daemon, ReportsItsVersionAndUsage) {
   EXPECT_EQ(run_daemon({"--version"}), (std::pair<int, std::string>{0, std::string("manannan ") + manannan::version + "\n"}));
-  const auto [status, output] = run_daemon({});
+  const auto [status, output] = run_daemon({"stray"});
   EXPECT_EQ(status, 2);
-  EXPECT_TRUE(contains(output, "usage: manannan <config.yaml>"));
+  EXPECT_TRUE(contains(output, "usage: manannan [--config <config.yaml>]"));
 }
 
 TEST(Daemon, LogsWhyItCannotStart) {
-  const auto [status, output] = run_daemon({(work_directory("daemon") / "absent.yaml").string()});
+  const auto [status, output] = run_daemon({"--config", (work_directory("daemon") / "absent.yaml").string()});
   EXPECT_EQ(status, 1);
   EXPECT_TRUE(contains(output, "[ERROR] ")) << output;
+}
+
+TEST(Daemon, LogsAsJsonWhenAsked) {
+  ScopedEnvironment format("MANANNAN_LOG_FORMAT", "json");
+  const auto [status, output] = run_daemon({"--config", configuration(no_records)});
+  EXPECT_EQ(status, 1);
+  EXPECT_TRUE(std::regex_search(output, std::regex(R"(\{"time":"[0-9T:Z-]+","level":"error","message":"registry test_registry has no records configured"\})")))
+      << output;
 }
 }  // namespace
