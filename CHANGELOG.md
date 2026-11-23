@@ -2,7 +2,7 @@
 
 Newest first.
 
-## Unreleased (0.4.0)
+## 0.4.0
 
 Breaking: the configuration and the package layout change. An upgrade of
 the package migrates a 0.3 installation (see `docs/running.md`).

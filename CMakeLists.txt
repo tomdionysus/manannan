@@ -5,7 +5,7 @@
 # Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
 #
 cmake_minimum_required(VERSION 3.24)
-project(Manannan VERSION 0.3.0 LANGUAGES CXX)
+project(Manannan VERSION 0.4.0 LANGUAGES CXX)
 
 include(GNUInstallDirs)
 
