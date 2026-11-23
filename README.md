@@ -78,7 +78,10 @@ Updates arrive with `sudo apt upgrade`.
 - [Building from source](docs/building.md), including moving a source install
   to the package.
 - [Writing plugins](docs/PLUGINS.md) for other sources and providers.
-- [Packaging](docs/packaging.md) and [the name](docs/NAME.md).
+- [Packaging](docs/packaging.md), [licensing](docs/licensing.md) and
+  [the name](docs/NAME.md).
+- [Contributing](CONTRIBUTING.md), the [changelog](CHANGELOG.md) and the
+  [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Licence
 
