@@ -3,6 +3,21 @@
 Newest first. Each entry: what landed, the commit, and its gate counts (tests
 run and passed, sanitizers run). Each session leaves a handoff here.
 
+## 0.4.0 built and staged, 2026-11-23 (main 3d7c225, tag 0.4.0)
+
+- On the owner's word: main and the tags 0.2.0, 0.3.0, v0.2.0 and v0.3.0
+  force-pushed onto the rewritten history (main with a lease on the old
+  tip), develop pushed, the stale dependabot branch deleted; the repository's
+  description and topics set. Hosted CI on develop: all 15 jobs green.
+- develop merged to main and tagged 0.4.0, locally. Packages built from a
+  fresh clone of the tag on a claimed trixie arm64 Pi: 89 tests run, 89
+  passed in the build; lintian clean. Staged in the apt tree's
+  incoming/manannan/0.4.0/ (sha256 of manannan_0.4.0_arm64.deb begins
+  97dd59ad002b).
+- The GitHub Support request for the pull-request refs was not filed: a
+  browser attempt was stopped and browser use is now the owner's to ask
+  for. It is listed under "Waiting on the owner".
+
 ## Handoff, 2026-11-23: 0.4.0 gated locally, waiting on the push
 
 - Version 0.4.0 on develop (99e4957). Release gates, each once, on claimed

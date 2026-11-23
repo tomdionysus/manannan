@@ -2,16 +2,14 @@
 
 ## Resume here
 
-The alignment to the group standards (Decisions 9 to 15,
-TODO/2026-11-23-alignment.md) is done on `develop`, which carries the 0.4.0
-version commit; every local release gate has passed once (COMPLETED.md).
-What remains of the release waits on the owner's word to push (below):
-nothing is pushed, history was rewritten locally, and main and every tag
-need a force-push. After it: hosted CI green on develop, then merge develop
-to main, tag 0.4.0 on main, build the packages from the tag on a claimed
-trixie arm64 Pi, and stage them in the apt tree's incoming/ (Decision 8);
-the owner uploads; nodes upgrade on the owner's go, checking the migration
-at debug on each. No build-cluster cores are held. Builds run through
+0.4.0 is built and staged: develop merged to main (3d7c225) and tagged
+0.4.0 there, locally; packages built from a fresh clone of the tag on a
+claimed trixie arm64 Pi (89 tests passed in the build, lintian clean) and
+copied to the apt tree's incoming/manannan/0.4.0/. The rewritten history,
+develop and the older tags are pushed; hosted CI is green on develop. What
+remains is the owner's (below): pushing main and the 0.4.0 tag, the apt
+upload, and each node's upgrade, checking the migration at debug on each.
+No build-cluster cores are held. Builds run through
 build/pi-test.sh and build/pi-ci.sh (untracked helpers: they rsync the tree
 to /root/manannan-work on a claimed Pi). 0.3.0 is what the apt repository
 and both nodes run.
@@ -86,20 +84,21 @@ and both nodes run.
 
 ## Waiting on the owner
 
-1. Push, with force for the rewritten history: `git push --force origin main
-   0.2.0 0.3.0 v0.2.0 v0.3.0` (main and the four tags), `git push origin
-   develop`, and delete the stale remote branch
-   dependabot/github_actions/actions/checkout-7. The workflows changed, and the
-   gh token has no workflow scope, so this goes over ssh. Recommendation: push.
-2. GitHub keeps refs/pull/1-4/head with the old commits, and the record
-   names in them; only GitHub support can remove those. Recommendation: ask
-   them, since the names are already public DNS names.
-3. After the release is staged: the apt upload, then each node's upgrade.
+1. Push main and the 0.4.0 tag: `git push origin main 0.4.0` (a fast-forward
+   of main). Recommendation: push, then confirm CI green on main.
+2. The apt upload of incoming/manannan/0.4.0, then each node's upgrade.
+3. GitHub keeps refs/pull/1-4/head with the pre-rewrite commits, and the
+   record names in them; the old commits are still fetchable by hash. Only a
+   GitHub Support request (a web form under the owner's account) removes
+   them; it is the owner's to file. It needs the repository, the PR refs and
+   the orphaned commits (build/history-rewrite/commit-map; first changed:
+   bdd0ef7, now 4e5730c). The names are public DNS names.
 
 ## The work, in order
 
-1. Finish 0.4.0 after the push (Resume here). The alignment steps are all
-   done; TODO/2026-11-23-alignment.md is their record.
+1. After the owner's steps above: confirm CI on main, and after each node's
+   upgrade a clean first cycle at debug. The alignment steps are all done;
+   TODO/2026-11-23-alignment.md is their record.
 
 Then for 0.5.0: AAAA records (an IPv6 source and a record-type setting; a
 plugin interface change bumps `plugin_abi_version`). Waits on the owner
