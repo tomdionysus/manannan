@@ -12,7 +12,6 @@
 #include <cstdlib>
 #include <initializer_list>
 #include <memory>
-#include <regex>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -21,14 +20,18 @@
 #include "aws_sigv4.h"
 #include "manannan/plugin.h"
 #include "manannan/version.h"
+#include "route53_response.h"
 
 namespace {
 
 using manannan::aws::Credentials;
 using manannan::aws::Secret;
 
+// Stops the transfer, by taking nothing, once the response would pass its cap.
 std::size_t append_data(char* data, std::size_t size, std::size_t count, void* target) {
-  static_cast<std::string*>(target)->append(data, size * count);
+  auto& response = *static_cast<std::string*>(target);
+  if (response.size() + size * count > manannan::aws::max_response_bytes) return 0;
+  response.append(data, size * count);
   return size * count;
 }
 
@@ -129,34 +132,6 @@ std::string xml_escape(const std::string& value) {
   return result;
 }
 
-std::string xml_unescape(std::string value) {
-  const std::vector<std::pair<std::string, std::string>> replacements{{"&lt;", "<"}, {"&gt;", ">"}, {"&quot;", "\""}, {"&apos;", "'"}, {"&amp;", "&"}};
-  for (const auto& [encoded, plain] : replacements) {
-    std::size_t position = 0;
-    while ((position = value.find(encoded, position)) != std::string::npos) {
-      value.replace(position, encoded.size(), plain);
-      position += plain.size();
-    }
-  }
-  return value;
-}
-
-// Route 53 returns names in lower case with characters outside [a-z0-9-_.] as
-// three-digit octal escapes, for example "*" as "\052".
-std::string decode_dns_name(const std::string& value) {
-  std::string result;
-  for (std::size_t i = 0; i < value.size(); ++i) {
-    if (value[i] == '\\' && i + 3 < value.size() && std::isdigit(static_cast<unsigned char>(value[i + 1])) &&
-        std::isdigit(static_cast<unsigned char>(value[i + 2])) && std::isdigit(static_cast<unsigned char>(value[i + 3]))) {
-      result += static_cast<char>(std::stoi(value.substr(i + 1, 3), nullptr, 8));
-      i += 3;
-    } else {
-      result += value[i];
-    }
-  }
-  return lowercase(result);
-}
-
 struct Record {
   std::string name;  // as reported to the service: lower case, no trailing dot
   std::string fqdn;  // as sent to Route 53: lower case, with trailing dot
@@ -242,19 +217,9 @@ class AwsRoute53 final : public manannan::RegistryPlugin {
     _logger->debug("reading A record " + record.fqdn + " in zone " + record.zone);
     const auto query = "maxitems=1&name=" + manannan::aws::url_encode(record.fqdn) + "&type=A";
     const auto response = request(record, "GET", rrset_path(record), query, "");
-    const std::regex set_pattern("<ResourceRecordSet>([\\s\\S]*?)</ResourceRecordSet>");
-    const std::regex name_pattern("<Name>([^<]+)</Name>");
-    const std::regex value_pattern("<ResourceRecord>\\s*<Value>([^<]+)</Value>");
-    for (auto current = std::sregex_iterator(response.begin(), response.end(), set_pattern); current != std::sregex_iterator(); ++current) {
-      const auto set = (*current)[1].str();
-      std::smatch name_match;
-      std::smatch value_match;
-      if (std::regex_search(set, name_match, name_pattern) && decode_dns_name(xml_unescape(name_match[1].str())) == record.fqdn &&
-          set.find("<Type>A</Type>") != std::string::npos && std::regex_search(set, value_match, value_pattern)) {
-        const auto value = xml_unescape(value_match[1].str());
-        _logger->debug(record.name + " is registered as " + value);
-        return value;
-      }
+    if (const auto value = manannan::aws::find_a_record(response, record.fqdn)) {
+      _logger->debug(record.name + " is registered as " + *value);
+      return *value;
     }
     _logger->debug(record.name + " has no A record");
     return {};

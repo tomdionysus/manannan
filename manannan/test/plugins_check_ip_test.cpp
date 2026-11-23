@@ -14,6 +14,7 @@
 #include <stdexcept>
 #include <string>
 
+#include "check_ip_body.h"
 #include "fixtures/http_server.h"
 #include "fixtures/support.h"
 #include "manannan/daemon/plugin_loader.h"
@@ -77,6 +78,11 @@ TEST_F(CheckIp, RefusesABodyThatIsNotAnIpv4Address) {
     HttpServer server([body](const HttpRequest&) { return HttpResponse{200, body}; });
     EXPECT_EQ(error_from(server.url()), "check IP returned invalid IPv4 value") << body;
   }
+}
+
+TEST_F(CheckIp, StopsReadingABodyPastItsCap) {
+  HttpServer server([](const HttpRequest&) { return HttpResponse{200, "198.51.100.7" + std::string(manannan::check_ip::max_body_bytes, ' ')}; });
+  EXPECT_TRUE(contains(error_from(server.url()), "check IP request failed: ")) << error_from(server.url());
 }
 
 TEST_F(CheckIp, ReportsAnUnreachableEndpoint) {

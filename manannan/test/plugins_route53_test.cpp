@@ -22,6 +22,7 @@
 #include "fixtures/support.h"
 #include "manannan/daemon/plugin_loader.h"
 #include "manannan/version.h"
+#include "route53_response.h"
 
 namespace {
 using manannan::PluginType;
@@ -268,6 +269,43 @@ TEST_F(Route53Requests, ReportsErrorStatusesWithTheirBody) {
   }
   status = 301;
   EXPECT_THROW(plugin.set_value("a.example.com", "192.0.2.1"), std::runtime_error);
+}
+
+TEST_F(Route53Requests, StopsReadingAResponsePastItsCap) {
+  list_body = std::string(manannan::aws::max_response_bytes + 1, ' ');
+  try {
+    (void)registry().get_value("a.example.com");
+    FAIL();
+  } catch (const std::runtime_error& failure) {
+    EXPECT_TRUE(contains(failure.what(), "Route 53 request failed: ")) << failure.what();
+  }
+}
+
+TEST(Route53Response, DecodesOnlyValidOctalEscapes) {
+  using manannan::aws::decode_dns_name;
+  EXPECT_EQ(decode_dns_name("\\052.Example.COM."), "*.example.com.");
+  EXPECT_EQ(decode_dns_name("\\101"), "a");  // decoded, then lower case
+  EXPECT_EQ(decode_dns_name("\\999.\\400.\\08x"), "\\999.\\400.\\08x");
+  EXPECT_EQ(decode_dns_name("end\\05"), "end\\05");
+}
+
+TEST(Route53Response, UnescapesTheFivePredefinedEntitiesOnce) {
+  EXPECT_EQ(manannan::aws::xml_unescape("&lt;&gt;&quot;&apos;&amp;lt;&unknown;"), "<>\"'&lt;&unknown;");
+}
+
+TEST(Route53Response, FindsTheFirstARecordSetWithTheName) {
+  using manannan::aws::find_a_record;
+  EXPECT_EQ(find_a_record("<ResourceRecordSet><Name>a.example.com.</Name><Type>A</Type><ResourceRecords><ResourceRecord>\n  <Value>192.0.2.1</Value>"
+                          "</ResourceRecord></ResourceRecords></ResourceRecordSet>",
+                          "a.example.com."),
+            "192.0.2.1");
+  // An empty name or value, a value not first in its record, and an unclosed set are not answers.
+  EXPECT_EQ(find_a_record("<ResourceRecordSet><Name></Name><Name>a.example.com.</Name><Type>A</Type><ResourceRecord><Value></Value></ResourceRecord>"
+                          "<ResourceRecord>x<Value>192.0.2.2</Value></ResourceRecord><ResourceRecord><Value>192.0.2.3</Value></ResourceRecord>"
+                          "</ResourceRecordSet><ResourceRecordSet><Name>a.example.com.</Name>",
+                          "a.example.com."),
+            "192.0.2.3");
+  EXPECT_EQ(find_a_record("", "a.example.com."), std::nullopt);
 }
 
 TEST_F(Route53Requests, RefusesUnknownRecords) {

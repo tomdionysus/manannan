@@ -121,7 +121,7 @@ case "$step" in
     lcov --summary "$out/coverage.info" --ignore-errors "$ignore"
     ;;
   fuzz)
-    flags="-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined"
+    flags="-fsanitize=address,undefined,fuzzer-no-link -fno-omit-frame-pointer -fno-sanitize-recover=undefined"
     # shellcheck disable=SC2086
     CXX=${CLANGXX:-clang++} cmake -S "$top" -B "$out/fuzz" $generator -DCMAKE_BUILD_TYPE=RelWithDebInfo -D${OPTION_PREFIX}_BUILD_FUZZING=ON \
       -DCMAKE_CXX_FLAGS="$flags" -DCMAKE_EXE_LINKER_FLAGS="$flags" -DCMAKE_SHARED_LINKER_FLAGS="$flags" -DCMAKE_MODULE_LINKER_FLAGS="$flags"

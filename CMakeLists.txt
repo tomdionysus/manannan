@@ -20,6 +20,7 @@ endif()
 
 option(MANANNAN_BUILD_TESTING "Build manannan_tests (GoogleTest)" OFF)
 option(MANANNAN_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
+option(MANANNAN_BUILD_FUZZING "Build each fuzz target as its own binary (clang and libFuzzer)" OFF)
 
 find_package(yaml-cpp 0.6 CONFIG REQUIRED)
 # yaml-cpp before 0.8 exports its target without the yaml-cpp:: namespace.
@@ -57,6 +58,9 @@ configure_file(config/config.yaml.in config.yaml @ONLY)
 configure_file(man/manannan.8.in manannan.8 @ONLY)
 
 add_subdirectory(plugins)
+if(MANANNAN_BUILD_FUZZING)
+  add_subdirectory(manannan/fuzz fuzz)
+endif()
 
 install(TARGETS manannan RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/manannan.8 DESTINATION ${CMAKE_INSTALL_MANDIR}/man8)

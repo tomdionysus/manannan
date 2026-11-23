@@ -4,24 +4,22 @@
 // Copyright (C) 2026 Tom Cully <mail@tomcully.com>
 // Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
 //
-#include <arpa/inet.h>
 #include <curl/curl.h>
 
 #include <memory>
 #include <stdexcept>
 #include <string>
 
+#include "check_ip_body.h"
 #include "manannan/plugin.h"
 #include "manannan/version.h"
 namespace {
+// Stops the transfer, by taking nothing, once the body would pass its cap.
 std::size_t append_data(char* data, std::size_t size, std::size_t count, void* target) {
-  static_cast<std::string*>(target)->append(data, size * count);
+  auto& body = *static_cast<std::string*>(target);
+  if (body.size() + size * count > manannan::check_ip::max_body_bytes) return 0;
+  body.append(data, size * count);
   return size * count;
-}
-std::string trim(std::string value) {
-  const auto first = value.find_first_not_of(" \t\r\n");
-  const auto last = value.find_last_not_of(" \t\r\n");
-  return first == std::string::npos ? std::string{} : value.substr(first, last - first + 1);
 }
 class AmazonCheckIp final : public manannan::SourcePlugin {
  public:
@@ -53,11 +51,9 @@ class AmazonCheckIp final : public manannan::SourcePlugin {
     curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &status);
     if (result != CURLE_OK) throw std::runtime_error(std::string("check IP request failed: ") + curl_easy_strerror(result));
     if (status != 200) throw std::runtime_error("check IP returned HTTP " + std::to_string(status));
-    response = trim(response);
-    in_addr address{};
-    if (inet_pton(AF_INET, response.c_str(), &address) != 1) throw std::runtime_error("check IP returned invalid IPv4 value");
-    _logger->debug("external address is " + response);
-    return response;
+    const auto address = manannan::check_ip::parse_body(response);
+    _logger->debug("external address is " + address);
+    return address;
   }
 
  private:
