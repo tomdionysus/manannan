@@ -38,29 +38,12 @@ if(MANANNAN_COVERAGE)
   target_link_options(manannan_warnings INTERFACE --coverage)
 endif()
 
-configure_file(include/manannan/version.h.in ${PROJECT_BINARY_DIR}/generated/manannan/version.h @ONLY)
+configure_file(manannan/include/manannan/version.h.in ${PROJECT_BINARY_DIR}/generated/manannan/version.h @ONLY)
 
-add_library(manannan_api INTERFACE)
-target_include_directories(manannan_api INTERFACE
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/generated>
-  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-target_link_libraries(manannan_api INTERFACE yaml-cpp::yaml-cpp)
-
-# Everything but main(), so the tests drive the same code the daemon runs.
-add_library(manannan_core STATIC
-  src/application.cpp
-  src/config.cpp
-  src/duration.cpp
-  src/loggers/logger_scoped.cpp
-  src/loggers/logger_stdio.cpp
-  src/plugin_loader.cpp
-  src/service.cpp
-  src/util.cpp)
-target_link_libraries(manannan_core PUBLIC manannan_api ${CMAKE_DL_LIBS} PRIVATE manannan_warnings)
-
-add_executable(manannan src/main.cpp)
-target_link_libraries(manannan PRIVATE manannan_core manannan_warnings)
+# Executables at the top of the build tree, so the core's binary directory
+# cannot share the daemon's name.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
+add_subdirectory(manannan core)
 
 # Plugins install here; the generated configuration and unit file refer to the
 # same install directories so they agree on every prefix and libdir layout.
@@ -73,7 +56,7 @@ add_subdirectory(plugins)
 
 install(TARGETS manannan RUNTIME DESTINATION ${CMAKE_INSTALL_SBINDIR})
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/manannan.8 DESTINATION ${CMAKE_INSTALL_MANDIR}/man8)
-install(DIRECTORY include/manannan DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} PATTERN "*.in" EXCLUDE)
+install(DIRECTORY manannan/include/manannan DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} PATTERN "*.in" EXCLUDE)
 install(FILES ${PROJECT_BINARY_DIR}/generated/manannan/version.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/manannan)
 # Never overwrite an existing configuration: it holds the site's records and
 # credentials. The template is installed only on a fresh install.
@@ -94,5 +77,5 @@ endif()
 
 if(MANANNAN_BUILD_TESTING)
   find_package(GTest 1.12 CONFIG REQUIRED)
-  add_subdirectory(tests)
+  add_subdirectory(manannan/test test)
 endif()

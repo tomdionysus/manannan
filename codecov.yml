@@ -10,4 +10,4 @@ coverage:
         informational: true
 
 ignore:
-  - tests/
+  - manannan/test/

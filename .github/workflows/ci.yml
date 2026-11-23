@@ -90,7 +90,7 @@ jobs:
           cmake --build build -j "$(nproc)"
 
       - name: Test
-        run: build/tests/manannan_tests
+        run: build/manannan_tests
 
   # The package as a Pi builds it, on arm64: its tests run inside the build, and
   # lintian fails it on any error or warning.
@@ -140,4 +140,4 @@ jobs:
           cmake --build build -j "$(sysctl -n hw.ncpu)"
 
       - name: Test
-        run: build/tests/manannan_tests
+        run: build/manannan_tests

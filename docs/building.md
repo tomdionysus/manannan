@@ -41,7 +41,7 @@ git clone https://github.com/tomdionysus/manannan.git
 cd manannan
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMANANNAN_BUILD_TESTING=ON
 cmake --build build
-./build/tests/manannan_tests
+./build/manannan_tests
 sudo cmake --install build
 ```
 

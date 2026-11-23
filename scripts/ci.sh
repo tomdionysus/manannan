@@ -26,7 +26,7 @@ step() { printf '\n== %s\n' "$1"; }
 step "release build and tests"
 cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DMANANNAN_BUILD_TESTING=ON -DMANANNAN_WARNINGS_AS_ERRORS=ON >/dev/null
 cmake --build build-release -j "$jobs"
-build-release/tests/manannan_tests
+build-release/manannan_tests
 
 step "AddressSanitizer and UndefinedBehaviorSanitizer"
 cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DMANANNAN_BUILD_TESTING=ON -DMANANNAN_WARNINGS_AS_ERRORS=ON \
@@ -35,16 +35,16 @@ cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DMANANNAN_BUILD_TESTING=ON -D
     -DCMAKE_MODULE_LINKER_FLAGS="-fsanitize=address,undefined" >/dev/null
 cmake --build build-asan -j "$jobs"
 ASAN_OPTIONS=detect_leaks=1:abort_on_error=1 UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 \
-    build-asan/tests/manannan_tests
+    build-asan/manannan_tests
 
 step "coverage"
 cmake -S . -B build-coverage -DCMAKE_BUILD_TYPE=Debug -DMANANNAN_BUILD_TESTING=ON -DMANANNAN_COVERAGE=ON >/dev/null
 find build-coverage -name '*.gcda' -delete
 cmake --build build-coverage -j "$jobs"
-build-coverage/tests/manannan_tests
+build-coverage/manannan_tests
 ignore=inconsistent,inconsistent,mismatch,negative,unused
 lcov --quiet --capture --directory build-coverage --ignore-errors "$ignore" --output-file build-coverage/all.info
-lcov --quiet --extract build-coverage/all.info "$top/src/*" "$top/include/*" "$top/plugins/*" \
+lcov --quiet --extract build-coverage/all.info "$top/manannan/daemon/*" "$top/manannan/loggers/*" "$top/manannan/include/*" "$top/plugins/*" \
     --ignore-errors "$ignore" --output-file build-coverage/coverage.info
 rm build-coverage/all.info
 lcov --summary build-coverage/coverage.info --ignore-errors "$ignore"

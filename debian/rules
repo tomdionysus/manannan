@@ -28,7 +28,7 @@ override_dh_auto_configure:
 # server of their own on the loopback interface.
 override_dh_auto_test:
 ifeq ($(TESTS),ON)
-	debian/build/tests/manannan_tests
+	debian/build/manannan_tests
 endif
 
 # The packaged configuration is an example, so the service is installed
