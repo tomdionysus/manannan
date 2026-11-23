@@ -20,7 +20,6 @@ endif()
 
 option(MANANNAN_BUILD_TESTING "Build manannan_tests (GoogleTest)" OFF)
 option(MANANNAN_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
-option(MANANNAN_COVERAGE "Instrument the daemon, plugins and tests for gcov" OFF)
 
 find_package(yaml-cpp 0.6 CONFIG REQUIRED)
 # yaml-cpp before 0.8 exports its target without the yaml-cpp:: namespace.
@@ -41,10 +40,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 if(MANANNAN_WARNINGS_AS_ERRORS)
   target_compile_options(manannan_warnings INTERFACE -Werror)
-endif()
-if(MANANNAN_COVERAGE)
-  target_compile_options(manannan_warnings INTERFACE --coverage -O0 -g)
-  target_link_options(manannan_warnings INTERFACE --coverage)
 endif()
 
 configure_file(manannan/include/manannan/version.h.in ${PROJECT_BINARY_DIR}/generated/manannan/version.h @ONLY)

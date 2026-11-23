@@ -4,42 +4,48 @@
 # Copyright (C) 2026 Tom Cully <mail@tomcully.com>
 # Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
 #
-# A clang-format check; scripts/ci.sh on Debian trixie (release, sanitizer and coverage builds with
-# their tests, coverage to Codecov); a build and test with Clang; the Debian
-# package on arm64, as a Pi builds it, checked by lintian; and a build and test
-# on macOS. Every network request the tests make goes to a local server.
+# tools/ci.sh's steps on Debian trixie: the header and format check; release
+# builds and the installed headers' consumer on x86-64 and arm64; clang with
+# its thread-safety analysis; clang-tidy; ASan and UBSan on both, TSan; the
+# fuzz targets; coverage to Codecov; the Debian packages on both, linted; and
+# a build and test on macOS. Every network request the tests make goes to a
+# local server.
 name: CI
 
 on:
   push:
     branches: [main, develop]
+    paths-ignore: ["TODO/**", "docs/**", "**/*.md"]
   pull_request:
+    paths-ignore: ["TODO/**", "docs/**", "**/*.md"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  # The sources must be as .clang-format leaves them.
-  format:
-    runs-on: ubuntu-24.04
-    container:
-      image: debian:trixie
-    steps:
-      - name: Install packages
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends clang-format git ca-certificates
-
-      - uses: actions/checkout@v7
-
-      - name: Trust the checkout
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-
-      - name: Check formatting
-        run: git ls-files -z '*.cpp' '*.h' | xargs -0 clang-format --dry-run --Werror
-
   linux:
-    runs-on: ubuntu-24.04
+    name: ${{ matrix.step }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { step: check, arch: x86-64, runner: ubuntu-24.04 }
+          - { step: release, arch: x86-64, runner: ubuntu-24.04 }
+          - { step: release, arch: arm64, runner: ubuntu-24.04-arm }
+          - { step: clang, arch: x86-64, runner: ubuntu-24.04 }
+          - { step: tidy, arch: x86-64, runner: ubuntu-24.04 }
+          - { step: asan, arch: x86-64, runner: ubuntu-24.04 }
+          - { step: asan, arch: arm64, runner: ubuntu-24.04-arm }
+          - { step: tsan, arch: x86-64, runner: ubuntu-24.04 }
+          - { step: fuzz, arch: x86-64, runner: ubuntu-24.04 }
+          - { step: package, arch: x86-64, runner: ubuntu-24.04 }
+          - { step: package, arch: arm64, runner: ubuntu-24.04-arm }
     container:
       image: debian:trixie
       # LeakSanitizer needs ptrace to stop the process's threads.
@@ -49,60 +55,36 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            build-essential cmake git ca-certificates libyaml-cpp-dev libcurl4-openssl-dev libssl-dev \
-            libgtest-dev lcov \
-            curl gnupg  # Codecov's uploader verifies its own signature
+            g++ clang clang-format clang-tidy libclang-rt-19-dev cmake ninja-build git ca-certificates \
+            libgtest-dev libyaml-cpp-dev libcurl4-openssl-dev libssl-dev
 
       - uses: actions/checkout@v7
 
       - name: Trust the checkout
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-      - name: Build and test
-        run: sh scripts/ci.sh
+      - name: ${{ matrix.step }}
+        run: tools/ci.sh ${{ matrix.step }}
 
-      - name: Upload coverage
-        uses: codecov/codecov-action@v7
-        with:
-          files: build-coverage/coverage.info
-          disable_search: true
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
-
-  clang:
-    runs-on: ubuntu-24.04
+  # The Debian packages, on both architectures: the tests run inside the build,
+  # and lintian fails them on any error or warning.
+  deb:
+    name: deb (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x86-64, runner: ubuntu-24.04 }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
     container:
       image: debian:trixie
     steps:
       - name: Install packages
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends \
-            clang cmake make git ca-certificates libyaml-cpp-dev libcurl4-openssl-dev libssl-dev libgtest-dev
-
-      - uses: actions/checkout@v7
-
-      - name: Build
-        env:
-          CXX: clang++
-        run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMANANNAN_BUILD_TESTING=ON -DMANANNAN_WARNINGS_AS_ERRORS=ON
-          cmake --build build -j "$(nproc)"
-
-      - name: Test
-        run: build/manannan_tests
-
-  # The package as a Pi builds it, on arm64: its tests run inside the build, and
-  # lintian fails it on any error or warning.
-  package:
-    runs-on: ubuntu-24.04-arm
-    container:
-      image: debian:trixie
-    steps:
-      - name: Install packages
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends dpkg-dev git ca-certificates lintian
+          apt-get install -y --no-install-recommends dpkg-dev debhelper git ca-certificates lintian
 
       - uses: actions/checkout@v7
         with:
@@ -115,18 +97,48 @@ jobs:
         run: apt-get build-dep -y ./
 
       - name: Build
-        run: scripts/build-deb.sh
+        run: tools/build-deb.sh
 
       - name: Lint
         run: lintian --fail-on error,warning build-deb/*.changes
 
       - uses: actions/upload-artifact@v7
         with:
-          name: deb
+          name: deb-${{ matrix.arch }}
           path: build-deb/*.deb
+
+  coverage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    container:
+      image: debian:trixie
+    steps:
+      - name: Install packages
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            g++ cmake ninja-build git ca-certificates libgtest-dev libyaml-cpp-dev libcurl4-openssl-dev libssl-dev lcov \
+            curl gnupg  # Codecov's uploader verifies its own signature
+
+      - uses: actions/checkout@v7
+
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Build and test
+        run: tools/ci.sh coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v7
+        with:
+          files: build-ci/coverage.info
+          disable_search: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
 
   macos:
     runs-on: macos-15
+    timeout-minutes: 60
     steps:
       - name: Install packages
         run: brew install yaml-cpp googletest openssl@3

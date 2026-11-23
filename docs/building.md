@@ -125,13 +125,25 @@ source install has to go first.
 | --- | --- | --- |
 | `MANANNAN_BUILD_TESTING` | `OFF` | Build `manannan_tests` (GoogleTest) |
 | `MANANNAN_WARNINGS_AS_ERRORS` | `OFF` | Treat compiler warnings as errors |
-| `MANANNAN_COVERAGE` | `OFF` | Instrument the daemon, plugins and tests for gcov |
+| `MANANNAN_BUILD_FUZZING` | `OFF` | Build each fuzz target (clang and libFuzzer) |
 
-`scripts/ci.sh` is what CI runs on Debian trixie: the tests in a release
-build with warnings as errors, under AddressSanitizer and
-UndefinedBehaviorSanitizer, and in a coverage build with an lcov report.
-`scripts/build-deb.sh` builds the Debian packages; see
-[packaging.md](packaging.md).
+`tools/ci.sh <step>` runs one CI step on Debian trixie, the same in GitHub's
+runner as on a build machine:
+
+| Step | What it does |
+| --- | --- |
+| `check` | the header block on every source; clang-format |
+| `release` | g++ release build, warnings as errors, the tests |
+| `clang` | the same with clang++ and its thread-safety analysis |
+| `tidy` | clang-tidy's use-after-move check |
+| `asan` | the tests under AddressSanitizer and UndefinedBehaviorSanitizer |
+| `tsan` | the tests under ThreadSanitizer |
+| `package` | install, then build and run a plugin against the installed headers |
+| `coverage` | the tests in a coverage build, with an lcov report |
+| `fuzz` | each fuzz target for `FUZZ_SECONDS` (default 60) |
+
+Builds go under `build-ci/`. `tools/build-deb.sh` builds the Debian packages;
+see [packaging.md](packaging.md).
 
 `.clang-format` is authoritative: run `clang-format -i` on the files you
 change. CI fails any source that clang-format would change.

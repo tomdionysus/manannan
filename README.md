@@ -4,6 +4,7 @@
 [![codecov](https://codecov.io/gh/tomdionysus/manannan/graph/badge.svg)](https://codecov.io/gh/tomdionysus/manannan)
 [![CodeQL](https://github.com/tomdionysus/manannan/actions/workflows/codeql.yml/badge.svg)](https://github.com/tomdionysus/manannan/actions/workflows/codeql.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/tag/tomdionysus/manannan?sort=semver&filter=!v*&label=release)](https://github.com/tomdionysus/manannan/tags)
 
 Manannan keeps DNS records pointed at your public IP address. It runs as a
 service, checks the address every few minutes and updates any record that is

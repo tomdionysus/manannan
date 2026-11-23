@@ -4,8 +4,8 @@
 # Copyright (C) 2026 Tom Cully <mail@tomcully.com>
 # Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
 #
-# The daemon, its plugins and their headers, uploaded by .github/workflows/ci.yml.
-# Informational: coverage is reported, and does not fail a commit.
+# Coverage is reported, not enforced: the standard is about 100%, and gaps are
+# a backlog in TODO/ACTIVE.md.
 coverage:
   status:
     project:
@@ -16,4 +16,6 @@ coverage:
         informational: true
 
 ignore:
-  - manannan/test/
+  - "manannan/test/**"
+  - "manannan/fuzz/**"
+  - "tools/**"

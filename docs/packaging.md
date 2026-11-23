@@ -14,27 +14,29 @@ checkout:
 ```sh
 sudo apt install dpkg-dev
 sudo apt build-dep ./
-scripts/build-deb.sh
+tools/build-deb.sh
 ```
 
 The packages are written to `build-deb/`. The tests run inside the build;
-`DEB_BUILD_OPTIONS=nocheck` skips them. CI builds the packages on arm64 and
-fails on any lintian error or warning.
+`DEB_BUILD_OPTIONS=nocheck` skips them. CI builds the packages on x86-64 and
+arm64 and fails on any lintian error or warning.
 
 ## Versions
 
-The version comes from `git describe`. The tag `v0.3.0` gives `0.3.0`; a build
-three commits later gives `0.3.0+git3.gabc1234`, which sorts after `0.3.0` and
-before `0.3.1`; uncommitted changes add `.dirty`. A build of a tag must match
+The version comes from `git describe`. The tag `0.4.0` gives `0.4.0`; a build
+three commits later gives `0.4.0+git3.gabc1234`, which sorts after `0.4.0` and
+before `0.4.1`; where no tag is reachable it is the tree's version and
+`+git.g<hash>`; uncommitted changes add `.dirty`. A build of a tag must match
 `project(Manannan VERSION ...)` in `CMakeLists.txt`, or the script refuses it.
-Only builds of a tag are released.
+Only builds of a tag are released. Tags are `x.y.z`, annotated, on `main`;
+releases before 0.4.0 also carry the older `vx.y.z` tags.
 
 ## Releasing
 
-1. Set the new version in `project(Manannan VERSION ...)`, commit, and tag
-   `vX.Y.Z` (annotated).
+1. On `develop`, set the new version in `project(Manannan VERSION ...)` and
+   commit. Merge `develop` to `main` and tag `x.y.z` (annotated) on `main`.
 2. Build from a clean clone of the tag on Debian trixie arm64 with
-   `scripts/build-deb.sh`, and check it with
+   `tools/build-deb.sh`, and check it with
    `lintian --fail-on error,warning build-deb/*.changes`.
 3. Add the packages to the apt repository, which signs them, and upload it.
 

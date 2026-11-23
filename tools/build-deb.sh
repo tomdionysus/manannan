@@ -10,11 +10,12 @@
 # The packages are written to build-deb/.
 #
 #   sudo apt install dpkg-dev && sudo apt build-dep ./
-#   scripts/build-deb.sh [dpkg-buildpackage options]
+#   tools/build-deb.sh [dpkg-buildpackage options]
 #
-# The version comes from `git describe`: the tag v0.3.0 gives 0.3.0, and a
-# build three commits later 0.3.0+git3.gabc1234, which sorts after 0.3.0 and
-# before 0.3.1. Uncommitted changes add .dirty. DEB_BUILD_OPTIONS=nocheck
+# The version comes from `git describe`: the tag 0.4.0 gives 0.4.0, and a
+# build three commits later 0.4.0+git3.gabc1234, which sorts after 0.4.0 and
+# before 0.4.1. Where no tag is reachable it is the tree's version and
+# +git.g<hash>. Uncommitted changes add .dirty. DEB_BUILD_OPTIONS=nocheck
 # skips the tests.
 
 set -eu
@@ -22,12 +23,16 @@ set -eu
 top=$(git rev-parse --show-toplevel)
 cd "$top"
 
-describe=$(git describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' --dirty)
-version=$(echo "${describe#v}" | sed -E 's/-([0-9]+)-g([0-9a-f]+)/+git\1.g\2/; s/-dirty$/.dirty/')
+project=$(sed -nE 's/^project\(Manannan VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' CMakeLists.txt)
+if describe=$(git describe --tags --match '[0-9]*.[0-9]*.[0-9]*' --dirty 2>/dev/null); then
+    version=$(echo "$describe" | sed -E 's/-([0-9]+)-g([0-9a-f]+)/+git\1.g\2/; s/-dirty$/.dirty/')
+else
+    describe=$(git describe --always --dirty)
+    version=$(echo "$project+git.g$describe" | sed -E 's/-dirty$/.dirty/')
+fi
 
 # A build of a tag is a release, and has to be the version the tree says.
 # Between tags the tree may already carry the next one.
-project=$(sed -nE 's/^project\(Manannan VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' CMakeLists.txt)
 case "$version" in
     *+git*) ;;
     "$project" | "$project".dirty) ;;
