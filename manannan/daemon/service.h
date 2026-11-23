@@ -21,9 +21,9 @@ class Service {
   std::size_t reconcile();
 
  private:
-  SourcePlugin& source_private;
-  std::vector<Registry> registries_private;
-  std::chrono::milliseconds cadence_private;
-  std::shared_ptr<loggers::Logger> logger_private;
+  SourcePlugin& _source;
+  std::vector<Registry> _registries;
+  std::chrono::milliseconds _cadence;
+  std::shared_ptr<loggers::Logger> _logger;
 };
 }  // namespace manannan::daemon

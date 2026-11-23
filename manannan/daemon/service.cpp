@@ -20,28 +20,28 @@ timespec to_timespec(std::chrono::steady_clock::duration duration) {
 }
 }  // namespace
 Service::Service(SourcePlugin& source, std::vector<Registry> registries, std::chrono::milliseconds cadence, std::shared_ptr<loggers::Logger> logger)
-    : source_private(source), registries_private(std::move(registries)), cadence_private(cadence), logger_private(std::move(logger)) {}
+    : _source(source), _registries(std::move(registries)), _cadence(cadence), _logger(std::move(logger)) {}
 std::size_t Service::reconcile() {
-  logger_private->debug("loading value from source");
-  const auto desired = source_private.get_value();
+  _logger->debug("loading value from source");
+  const auto desired = _source.get_value();
   if (desired.empty()) throw std::runtime_error("source returned an empty value");
-  logger_private->debug("source value is " + desired);
+  _logger->debug("source value is " + desired);
   std::size_t failures = 0;
-  for (const auto& registry : registries_private) {
+  for (const auto& registry : _registries) {
     for (const auto& record : registry.plugin->records()) {
       const auto label = registry.name + ":" + record;
       try {
         const auto registered = registry.plugin->get_value(record);
         if (registered == desired) {
-          logger_private->debug(label + " is current: " + desired);
+          _logger->debug(label + " is current: " + desired);
           continue;
         }
-        logger_private->debug(label + " is '" + registered + "'; setting " + desired);
+        _logger->debug(label + " is '" + registered + "'; setting " + desired);
         registry.plugin->set_value(record, desired);
-        logger_private->info("set " + label + " to " + desired);
+        _logger->info("set " + label + " to " + desired);
       } catch (const std::exception& error) {
         ++failures;
-        logger_private->error(label + ": " + error.what());
+        _logger->error(label + ": " + error.what());
       }
     }
   }
@@ -76,17 +76,17 @@ int Service::run() {
     try {
       reconcile();
     } catch (const std::exception& error) {
-      logger_private->error(error.what());
+      _logger->error(error.what());
     }
   };
   attempt();
 
-  auto next_run = std::chrono::steady_clock::now() + cadence_private;
+  auto next_run = std::chrono::steady_clock::now() + _cadence;
   while (!shutdown_requested) {
     const auto now = std::chrono::steady_clock::now();
     if (now >= next_run) {
       attempt();
-      next_run = std::chrono::steady_clock::now() + cadence_private;
+      next_run = std::chrono::steady_clock::now() + _cadence;
       continue;
     }
     const auto timeout = to_timespec(next_run - now);
@@ -97,7 +97,7 @@ int Service::run() {
     }
   }
   restore();
-  logger_private->info("shutting down");
+  _logger->info("shutting down");
   return 0;
 }
 }  // namespace manannan::daemon

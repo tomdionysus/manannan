@@ -21,17 +21,17 @@ using manannan::test::RecordingLogger;
 // Captures std::cout and std::cerr for the life of the object.
 class CapturedStreams {
  public:
-  CapturedStreams() : out_(std::cout.rdbuf(captured_out.rdbuf())), err_(std::cerr.rdbuf(captured_err.rdbuf())) {}
+  CapturedStreams() : _out(std::cout.rdbuf(captured_out.rdbuf())), _err(std::cerr.rdbuf(captured_err.rdbuf())) {}
   ~CapturedStreams() {
-    std::cout.rdbuf(out_);
-    std::cerr.rdbuf(err_);
+    std::cout.rdbuf(_out);
+    std::cerr.rdbuf(_err);
   }
   std::ostringstream captured_out;
   std::ostringstream captured_err;
 
  private:
-  std::streambuf* out_;
-  std::streambuf* err_;
+  std::streambuf* _out;
+  std::streambuf* _err;
 };
 
 TEST(Logger, ZuluTimeIsIso8601Utc) { EXPECT_TRUE(std::regex_match(manannan::loggers::get_zulu_time(), std::regex(R"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ)"))); }

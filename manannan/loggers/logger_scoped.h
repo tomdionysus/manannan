@@ -20,8 +20,8 @@ class LoggerScoped : public Logger {
   void set_level(LogLevel level) override;
 
  private:
-  std::string scope_private;
-  std::shared_ptr<Logger> logger_private;
+  std::string _scope;
+  std::shared_ptr<Logger> _logger;
 };
 
 }  // namespace manannan::loggers

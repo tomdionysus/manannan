@@ -20,8 +20,8 @@ class LoggerStdIO : public Logger {
   void set_level(LogLevel level) override;
 
  private:
-  LogLevel log_level_private;
-  std::mutex mutex_private;
+  LogLevel _log_level;
+  std::mutex _mutex;
 };
 
 }  // namespace manannan::loggers

@@ -50,59 +50,59 @@ class HttpServer {
  public:
   using Handler = std::function<HttpResponse(const HttpRequest&)>;
 
-  explicit HttpServer(Handler handler) : handler_(std::move(handler)) {
-    listener_ = ::socket(AF_INET, SOCK_STREAM, 0);
-    if (listener_ < 0) throw std::runtime_error("socket failed");
+  explicit HttpServer(Handler handler) : _handler(std::move(handler)) {
+    _listener = ::socket(AF_INET, SOCK_STREAM, 0);
+    if (_listener < 0) throw std::runtime_error("socket failed");
     const int yes = 1;
-    ::setsockopt(listener_, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+    ::setsockopt(_listener, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
     sockaddr_in address{};
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     address.sin_port = 0;
-    if (::bind(listener_, reinterpret_cast<sockaddr*>(&address), sizeof(address)) < 0 || ::listen(listener_, 16) < 0)
+    if (::bind(_listener, reinterpret_cast<sockaddr*>(&address), sizeof(address)) < 0 || ::listen(_listener, 16) < 0)
       throw std::runtime_error("bind or listen failed");
     socklen_t size = sizeof(address);
-    ::getsockname(listener_, reinterpret_cast<sockaddr*>(&address), &size);
-    port_ = ntohs(address.sin_port);
-    if (::pipe(wake_) < 0) throw std::runtime_error("pipe failed");
-    thread_ = std::thread([this] { serve(); });
+    ::getsockname(_listener, reinterpret_cast<sockaddr*>(&address), &size);
+    _port = ntohs(address.sin_port);
+    if (::pipe(_wake) < 0) throw std::runtime_error("pipe failed");
+    _thread = std::thread([this] { serve(); });
   }
 
   ~HttpServer() {
     const char byte = 0;
-    (void)!::write(wake_[1], &byte, 1);
-    thread_.join();
-    ::close(listener_);
-    ::close(wake_[0]);
-    ::close(wake_[1]);
+    (void)!::write(_wake[1], &byte, 1);
+    _thread.join();
+    ::close(_listener);
+    ::close(_wake[0]);
+    ::close(_wake[1]);
   }
 
   HttpServer(const HttpServer&) = delete;
   HttpServer& operator=(const HttpServer&) = delete;
 
-  std::uint16_t port() const { return port_; }
-  std::string url(const std::string& path = "/") const { return "http://127.0.0.1:" + std::to_string(port_) + path; }
-  std::string authority() const { return "127.0.0.1:" + std::to_string(port_); }
+  std::uint16_t port() const { return _port; }
+  std::string url(const std::string& path = "/") const { return "http://127.0.0.1:" + std::to_string(_port) + path; }
+  std::string authority() const { return "127.0.0.1:" + std::to_string(_port); }
 
   std::vector<HttpRequest> requests() const {
-    std::lock_guard lock(mutex_);
-    return requests_;
+    std::lock_guard lock(_mutex);
+    return _requests;
   }
 
   // Waits until at least count requests have been received.
   bool wait_for(std::size_t count, std::chrono::milliseconds deadline = std::chrono::seconds(10)) const {
-    std::unique_lock lock(mutex_);
-    return answered_.wait_for(lock, deadline, [&] { return requests_.size() >= count; });
+    std::unique_lock lock(_mutex);
+    return _answered.wait_for(lock, deadline, [&] { return _requests.size() >= count; });
   }
 
  private:
   void serve() {
     for (;;) {
-      pollfd fds[2] = {{listener_, POLLIN, 0}, {wake_[0], POLLIN, 0}};
+      pollfd fds[2] = {{_listener, POLLIN, 0}, {_wake[0], POLLIN, 0}};
       if (::poll(fds, 2, -1) < 0) continue;
       if (fds[1].revents) return;
       if (!(fds[0].revents & POLLIN)) continue;
-      const int connection = ::accept(listener_, nullptr, nullptr);
+      const int connection = ::accept(_listener, nullptr, nullptr);
       if (connection < 0) continue;
       answer(connection);
       ::close(connection);
@@ -165,25 +165,25 @@ class HttpServer {
       request.body.append(buffer, static_cast<std::size_t>(received));
     }
 
-    const auto response = handler_(request);
+    const auto response = _handler(request);
     // Record before replying: once the client has its answer, requests() must show the request.
     {
-      std::lock_guard lock(mutex_);
-      requests_.push_back(std::move(request));
+      std::lock_guard lock(_mutex);
+      _requests.push_back(std::move(request));
     }
-    answered_.notify_all();
+    _answered.notify_all();
     send_all(connection, "HTTP/1.1 " + std::to_string(response.status) + " Test\r\nContent-Length: " + std::to_string(response.body.size()) +
                              "\r\nConnection: close\r\n\r\n" + response.body);
   }
 
-  Handler handler_;
-  int listener_ = -1;
-  int wake_[2] = {-1, -1};
-  std::uint16_t port_ = 0;
-  mutable std::mutex mutex_;
-  mutable std::condition_variable answered_;
-  std::vector<HttpRequest> requests_;
-  std::thread thread_;
+  Handler _handler;
+  int _listener = -1;
+  int _wake[2] = {-1, -1};
+  std::uint16_t _port = 0;
+  mutable std::mutex _mutex;
+  mutable std::condition_variable _answered;
+  std::vector<HttpRequest> _requests;
+  std::thread _thread;
 };
 
 // A port nothing listens on: one a server had, after it has closed.

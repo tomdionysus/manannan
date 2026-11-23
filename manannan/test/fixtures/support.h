@@ -33,9 +33,9 @@ class RecordingLogger final : public loggers::Logger {
 
   // Every message at the given level, in order.
   std::vector<std::string> at(loggers::LogLevel wanted) const {
-    std::lock_guard lock(mutex_);
+    std::lock_guard lock(_mutex);
     std::vector<std::string> result;
-    for (const auto& entry : entries_)
+    for (const auto& entry : _entries)
       if (entry.level == wanted) result.push_back(entry.text);
     return result;
   }
@@ -50,36 +50,36 @@ class RecordingLogger final : public loggers::Logger {
 
  private:
   void add(loggers::LogLevel level_of, const std::string& text) {
-    std::lock_guard lock(mutex_);
-    entries_.push_back({level_of, text});
+    std::lock_guard lock(_mutex);
+    _entries.push_back({level_of, text});
   }
 
-  mutable std::mutex mutex_;
-  std::vector<Entry> entries_;
+  mutable std::mutex _mutex;
+  std::vector<Entry> _entries;
 };
 
 // Sets (or, given nullopt, unsets) an environment variable until the end of the scope.
 class ScopedEnvironment {
  public:
-  ScopedEnvironment(std::string name, const std::optional<std::string>& value) : name_(std::move(name)) {
-    if (const auto* old = std::getenv(name_.c_str())) previous_ = old;
+  ScopedEnvironment(std::string name, const std::optional<std::string>& value) : _name(std::move(name)) {
+    if (const auto* old = std::getenv(_name.c_str())) _previous = old;
     if (value)
-      ::setenv(name_.c_str(), value->c_str(), 1);
+      ::setenv(_name.c_str(), value->c_str(), 1);
     else
-      ::unsetenv(name_.c_str());
+      ::unsetenv(_name.c_str());
   }
   ~ScopedEnvironment() {
-    if (previous_)
-      ::setenv(name_.c_str(), previous_->c_str(), 1);
+    if (_previous)
+      ::setenv(_name.c_str(), _previous->c_str(), 1);
     else
-      ::unsetenv(name_.c_str());
+      ::unsetenv(_name.c_str());
   }
   ScopedEnvironment(const ScopedEnvironment&) = delete;
   ScopedEnvironment& operator=(const ScopedEnvironment&) = delete;
 
  private:
-  std::string name_;
-  std::optional<std::string> previous_;
+  std::string _name;
+  std::optional<std::string> _previous;
 };
 
 // A fresh directory for one test, inside the build tree.

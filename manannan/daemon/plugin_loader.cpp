@@ -9,61 +9,60 @@
 #include "manannan/loggers/logger_scoped.h"
 namespace manannan::daemon {
 LoadedPlugin::LoadedPlugin(void* library, const PluginDescriptor* descriptor, Plugin* instance)
-    : library_private(library), descriptor_private(descriptor), instance_private(instance) {}
+    : _library(library), _descriptor(descriptor), _instance(instance) {}
 LoadedPlugin::~LoadedPlugin() { close(); }
-LoadedPlugin::LoadedPlugin(LoadedPlugin&& other) noexcept
-    : library_private(other.library_private), descriptor_private(other.descriptor_private), instance_private(other.instance_private) {
-  other.library_private = nullptr;
-  other.descriptor_private = nullptr;
-  other.instance_private = nullptr;
+LoadedPlugin::LoadedPlugin(LoadedPlugin&& other) noexcept : _library(other._library), _descriptor(other._descriptor), _instance(other._instance) {
+  other._library = nullptr;
+  other._descriptor = nullptr;
+  other._instance = nullptr;
 }
 LoadedPlugin& LoadedPlugin::operator=(LoadedPlugin&& other) noexcept {
   if (this != &other) {
     close();
-    library_private = other.library_private;
-    descriptor_private = other.descriptor_private;
-    instance_private = other.instance_private;
-    other.library_private = nullptr;
-    other.descriptor_private = nullptr;
-    other.instance_private = nullptr;
+    _library = other._library;
+    _descriptor = other._descriptor;
+    _instance = other._instance;
+    other._library = nullptr;
+    other._descriptor = nullptr;
+    other._instance = nullptr;
   }
   return *this;
 }
 void LoadedPlugin::close() {
-  if (instance_private && descriptor_private) descriptor_private->destroy(instance_private);
-  instance_private = nullptr;
-  descriptor_private = nullptr;
-  if (library_private) dlclose(library_private);
-  library_private = nullptr;
+  if (_instance && _descriptor) _descriptor->destroy(_instance);
+  _instance = nullptr;
+  _descriptor = nullptr;
+  if (_library) dlclose(_library);
+  _library = nullptr;
 }
-const PluginDescriptor& LoadedPlugin::descriptor() const { return *descriptor_private; }
-Plugin& LoadedPlugin::instance() const { return *instance_private; }
+const PluginDescriptor& LoadedPlugin::descriptor() const { return *_descriptor; }
+Plugin& LoadedPlugin::instance() const { return *_instance; }
 
-PluginLoader::PluginLoader(std::shared_ptr<loggers::Logger> logger) : logger_private(std::move(logger)) {}
+PluginLoader::PluginLoader(std::shared_ptr<loggers::Logger> logger) : _logger(std::move(logger)) {}
 void PluginLoader::scan(const std::vector<std::filesystem::path>& directories) {
   std::set<std::filesystem::path> scanned;
   for (const auto& directory : directories) {
-    logger_private->debug("scanning plugin directory " + directory.string());
+    _logger->debug("scanning plugin directory " + directory.string());
     std::error_code error;
     if (!std::filesystem::is_directory(directory, error)) {
-      logger_private->warn("plugin directory unavailable: " + directory.string());
+      _logger->warn("plugin directory unavailable: " + directory.string());
       continue;
     }
     const auto canonical = std::filesystem::weakly_canonical(directory, error);
     if (!scanned.insert(error ? directory : canonical).second) {
-      logger_private->debug("already scanned " + directory.string());
+      _logger->debug("already scanned " + directory.string());
       continue;
     }
     std::filesystem::directory_iterator entries(directory, error);
     if (error) {
-      logger_private->warn("cannot read plugin directory " + directory.string() + ": " + error.message());
+      _logger->warn("cannot read plugin directory " + directory.string() + ": " + error.message());
       continue;
     }
     for (const auto& entry : entries) {
       if (!entry.is_regular_file(error) || entry.path().extension() != ".so") continue;
       void* library = dlopen(entry.path().c_str(), RTLD_NOW | RTLD_LOCAL);
       if (!library) {
-        logger_private->warn("cannot inspect " + entry.path().string() + ": " + dlerror());
+        _logger->warn("cannot inspect " + entry.path().string() + ": " + dlerror());
         continue;
       }
       dlerror();
@@ -76,26 +75,26 @@ void PluginLoader::scan(const std::vector<std::filesystem::path>& directories) {
       const auto* descriptor = get_descriptor();
       if (!descriptor || descriptor->abi_version != plugin_abi_version || !descriptor->name || !descriptor->yaml_root || !descriptor->create ||
           !descriptor->destroy) {
-        logger_private->warn("invalid plugin: " + entry.path().string());
+        _logger->warn("invalid plugin: " + entry.path().string());
         dlclose(library);
         continue;
       }
       // The descriptor's strings live in the library: copy them before it is closed.
       const auto key = std::make_pair(descriptor->type, std::string(descriptor->name));
-      if (discovered_private.contains(key)) {
+      if (_discovered.contains(key)) {
         dlclose(library);
         throw std::runtime_error("duplicate plugin: " + key.second);
       }
-      discovered_private.emplace(key, entry.path());
-      logger_private->debug("discovered plugin " + key.second);
+      _discovered.emplace(key, entry.path());
+      _logger->debug("discovered plugin " + key.second);
       dlclose(library);
     }
   }
 }
 LoadedPlugin PluginLoader::create(PluginType type, const std::string& name, const YAML::Node& document) const {
-  const auto found = discovered_private.find({type, name});
-  if (found == discovered_private.end()) throw std::runtime_error("plugin not found: " + name);
-  logger_private->debug("loading plugin " + name + " from " + found->second.string());
+  const auto found = _discovered.find({type, name});
+  if (found == _discovered.end()) throw std::runtime_error("plugin not found: " + name);
+  _logger->debug("loading plugin " + name + " from " + found->second.string());
   void* library = dlopen(found->second.c_str(), RTLD_NOW | RTLD_LOCAL);
   if (!library) throw std::runtime_error("cannot load plugin " + name + ": " + dlerror());
   auto get_descriptor = reinterpret_cast<GetPluginDescriptor>(dlsym(library, MANANNAN_PLUGIN_ENTRYPOINT));
@@ -111,7 +110,7 @@ LoadedPlugin PluginLoader::create(PluginType type, const std::string& name, cons
     dlclose(library);
     throw std::runtime_error("plugin YAML root missing: " + root);
   }
-  auto scoped_logger = std::make_shared<loggers::LoggerScoped>(name, logger_private);
+  auto scoped_logger = std::make_shared<loggers::LoggerScoped>(name, _logger);
   Plugin* instance = nullptr;
   // An exception thrown by the plugin may have its type information and
   // destructor inside the plugin, so it must be finished with before dlclose.
@@ -127,7 +126,7 @@ LoadedPlugin PluginLoader::create(PluginType type, const std::string& name, cons
     dlclose(library);
     throw std::runtime_error("cannot create plugin " + name + ": " + failure);
   }
-  logger_private->info("loaded plugin " + name);
+  _logger->info("loaded plugin " + name);
   return LoadedPlugin(library, descriptor, instance);
 }
 }  // namespace manannan::daemon

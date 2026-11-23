@@ -21,28 +21,28 @@ namespace {
 
 class TestSource final : public manannan::SourcePlugin {
  public:
-  explicit TestSource(const YAML::Node& config) : value_(config["value"].as<std::string>("")) {}
-  std::string get_value() override { return value_; }
+  explicit TestSource(const YAML::Node& config) : _value(config["value"].as<std::string>("")) {}
+  std::string get_value() override { return _value; }
 
  private:
-  std::string value_;
+  std::string _value;
 };
 
 class TestRegistry final : public manannan::RegistryPlugin {
  public:
   explicit TestRegistry(const YAML::Node& config) {
-    for (const auto& record : config["records"]) values_[record.as<std::string>()] = "";
+    for (const auto& record : config["records"]) _values[record.as<std::string>()] = "";
   }
   std::vector<std::string> records() const override {
     std::vector<std::string> names;
-    for (const auto& [name, value] : values_) names.push_back(name);
+    for (const auto& [name, value] : _values) names.push_back(name);
     return names;
   }
-  std::string get_value(const std::string& record) override { return values_.at(record); }
-  void set_value(const std::string& record, const std::string& value) override { values_.at(record) = value; }
+  std::string get_value(const std::string& record) override { return _values.at(record); }
+  void set_value(const std::string& record, const std::string& value) override { _values.at(record) = value; }
 
  private:
-  std::map<std::string, std::string> values_;
+  std::map<std::string, std::string> _values;
 };
 
 manannan::Plugin* create(const YAML::Node& config, std::shared_ptr<manannan::loggers::Logger> logger) {
