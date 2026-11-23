@@ -1,3 +1,9 @@
+//
+// Manannan - plugin-based dynamic DNS updater
+//
+// Copyright (C) 2026 Tom Cully <mail@tomcully.com>
+// Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
+//
 #pragma once
 // Shared test support: a logger that records what it is given, environment
 // variables set for one scope, files written inside the build tree, and the

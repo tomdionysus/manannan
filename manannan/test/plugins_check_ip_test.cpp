@@ -1,3 +1,9 @@
+//
+// Manannan - plugin-based dynamic DNS updater
+//
+// Copyright (C) 2026 Tom Cully <mail@tomcully.com>
+// Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
+//
 // The amazon_check_ip source, against a local endpoint: it returns the
 // trimmed IPv4 address and refuses an error status, a body that is not an
 // IPv4 address, an unreachable endpoint and a timeout that is not positive.

@@ -6,10 +6,10 @@ other distributions and architectures, or to work on Manannan.
 
 ## Requirements
 
-- Linux with systemd. The package lists below cover Debian 12+, Ubuntu 22.04+,
+- Linux with systemd. The package lists below cover Debian 12+, Ubuntu 24.04+,
   Raspberry Pi OS, Fedora, RHEL 9+ and its rebuilds, Arch and openSUSE
   Tumbleweed.
-- A C++20 compiler, CMake 3.20+, yaml-cpp 0.6+, libcurl and OpenSSL libcrypto;
+- A C++20 compiler, CMake 3.24+, yaml-cpp 0.6+, libcurl and OpenSSL libcrypto;
   GoogleTest 1.12+ for the tests.
 
 ```sh

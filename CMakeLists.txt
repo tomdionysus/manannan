@@ -1,4 +1,10 @@
-cmake_minimum_required(VERSION 3.20)
+#
+# Manannan - plugin-based dynamic DNS updater
+#
+# Copyright (C) 2026 Tom Cully <mail@tomcully.com>
+# Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
+#
+cmake_minimum_required(VERSION 3.24)
 project(Manannan VERSION 0.3.0 LANGUAGES CXX)
 
 include(GNUInstallDirs)
@@ -30,6 +36,9 @@ endif()
 
 add_library(manannan_warnings INTERFACE)
 target_compile_options(manannan_warnings INTERFACE -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wno-sign-conversion)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  target_compile_options(manannan_warnings INTERFACE -Wthread-safety)
+endif()
 if(MANANNAN_WARNINGS_AS_ERRORS)
   target_compile_options(manannan_warnings INTERFACE -Werror)
 endif()

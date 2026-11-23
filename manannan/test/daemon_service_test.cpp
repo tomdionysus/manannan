@@ -1,3 +1,9 @@
+//
+// Manannan - plugin-based dynamic DNS updater
+//
+// Copyright (C) 2026 Tom Cully <mail@tomcully.com>
+// Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
+//
 // The service: each record of each registry is reconciled independently,
 // unchanged records are not written, an empty source value is never
 // published, and the loop runs on its cadence until SIGINT or SIGTERM,

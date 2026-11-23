@@ -1,3 +1,9 @@
+//
+// Manannan - plugin-based dynamic DNS updater
+//
+// Copyright (C) 2026 Tom Cully <mail@tomcully.com>
+// Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
+//
 // The plugin loader: discovery skips what is not a plugin of this ABI and
 // refuses two plugins of one kind and name; creation re-checks the library,
 // needs the plugin's configuration root, reports a factory's failure in full,

@@ -1,3 +1,9 @@
+//
+// Manannan - plugin-based dynamic DNS updater
+//
+// Copyright (C) 2026 Tom Cully <mail@tomcully.com>
+// Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
+//
 // The aws_route53 registry. Configuration: records across zones with
 // normalised names, the credential cascade (base block, AWS_* environment,
 // complete per-record blocks, ${NAME} expansion) and every refusal. Requests,

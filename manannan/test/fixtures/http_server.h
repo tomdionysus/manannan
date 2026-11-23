@@ -1,3 +1,9 @@
+//
+// Manannan - plugin-based dynamic DNS updater
+//
+// Copyright (C) 2026 Tom Cully <mail@tomcully.com>
+// Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
+//
 #pragma once
 // A loopback HTTP/1.1 server for the plugins' tests: it accepts connections
 // on 127.0.0.1 on a port of its own, answers each request through a handler

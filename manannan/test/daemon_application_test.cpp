@@ -1,3 +1,9 @@
+//
+// Manannan - plugin-based dynamic DNS updater
+//
+// Copyright (C) 2026 Tom Cully <mail@tomcully.com>
+// Licensed under the GNU GPLv3 - see <https://www.gnu.org/licenses/gpl-3.0.html>
+//
 // The daemon end to end: usage and --version, refusal of a bad configuration
 // or a registry with no records, a full run of the bundled plugins against
 // local check IP and Route 53 endpoints until SIGTERM, and the executable's
