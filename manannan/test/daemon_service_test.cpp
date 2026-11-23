@@ -365,10 +365,12 @@ TEST(SystemClock, APendingSignalTheMaskUnblocksEndsTheWait) {
   SystemClock clock;
   const auto start = clock.now();
   clock.wait_until(start + 1h, wait_mask);
-  EXPECT_EQ(woken, 1);
   EXPECT_LT(clock.now() - start, 1min);
 
   sigprocmask(SIG_SETMASK, &wait_mask, nullptr);
+  // The handler has run by now. (ThreadSanitizer runs a handler at its next
+  // intercepted call rather than inside pselect, so it is checked here.)
+  EXPECT_EQ(woken, 1);
   sigaction(SIGUSR1, &previous_action, nullptr);
 }
 }  // namespace
