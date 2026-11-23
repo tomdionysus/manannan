@@ -81,18 +81,14 @@ and both nodes run.
     CMake 3.24, MANANNAN_BUILD_FUZZING).
 15. 2026-11-23: the alignment, fuzz targets and back-off are 0.4.0; AAAA is
     0.5.0.
+16. 2026-11-23: no GitHub Support request about the pull-request refs that
+    still hold pre-rewrite commits ("Do NOT do 3"). Not to be raised again.
 
 ## Waiting on the owner
 
 1. Push main and the 0.4.0 tag: `git push origin main 0.4.0` (a fast-forward
    of main). Recommendation: push, then confirm CI green on main.
 2. The apt upload of incoming/manannan/0.4.0, then each node's upgrade.
-3. GitHub keeps refs/pull/1-4/head with the pre-rewrite commits, and the
-   record names in them; the old commits are still fetchable by hash. Only a
-   GitHub Support request (a web form under the owner's account) removes
-   them; it is the owner's to file. It needs the repository, the PR refs and
-   the orphaned commits (build/history-rewrite/commit-map; first changed:
-   bdd0ef7, now 4e5730c). The names are public DNS names.
 
 ## The work, in order
 
