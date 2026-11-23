@@ -3,12 +3,30 @@
 Newest first. Each entry: what landed, the commit, and its gate counts (tests
 run and passed, sanitizers run). Each session leaves a handoff here.
 
+## Second history rewrite, 2026-11-23
+
+- A record entry written this day (first committed as 861a244) named a
+  production node, a record and the node's public address. On the owner's
+  word the entry was rewritten forward and then removed from history with
+  git filter-repo (six literal replacements), and main, develop and the
+  0.4.0 tag were force-pushed with leases on their old tips.
+- Old to new: 861a244 to 36d778a, 3d7c225 to 05798b8 (main, and the 0.4.0
+  tag's commit), 55b82a9 to 3a08abd, af4a3de to c61681c, f24b34b to
+  d30206d, 9ea2693 to 4e96da4 (the spec), 85cb935 to 417aeaf. Every commit
+  before 861a244 is unchanged, and so are the tags before 0.4.0. The map and
+  a bundle of every ref before the rewrite are in build/history-rewrite-2/
+  (untracked).
+- The 0.4.0 tag's tree differs from the one the staged packages were built
+  from only in TODO/COMPLETED.md, which is not packaged, so the packages in
+  incoming/manannan/0.4.0 stand.
+- GitHub still serves the old commits by hash until it collects them.
+
 ## Handoff, 2026-11-23: 0.4.0 pushed, the 0.5.0 design settled
 
-- On the owner's "push": main (3d7c225), develop and the 0.4.0 tag pushed,
+- On the owner's "push": main, develop and the 0.4.0 tag pushed,
   both fast-forwards. CI (all jobs) and CodeQL green on main.
 - The 0.5.0 design written and settled with the owner question by question:
-  TODO/2026-11-23-clustered-dns-spec.md (committed 9ea2693). Manannan
+  TODO/2026-11-23-clustered-dns-spec.md (committed 4e96da4). Manannan
   becomes a clustered authoritative DNS server on Dannan and Dagda, keeping
   every 0.4 function. 32 answers recorded in its section 15; nothing open.
 - The design went through a critique before the owner's later rounds. What
@@ -26,7 +44,7 @@ run and passed, sanitizers run). Each session leaves a handoff here.
   global rule now forbids browser use unasked (Decision 18).
 - PLUGINS.md now describes the 0.4.0 back-off. No code changed.
 
-## 0.4.0 built and staged, 2026-11-23 (main 3d7c225, tag 0.4.0)
+## 0.4.0 built and staged, 2026-11-23 (main 05798b8, tag 0.4.0)
 
 - On the owner's word: main and the tags 0.2.0, 0.3.0, v0.2.0 and v0.3.0
   force-pushed onto the rewritten history (main with a lease on the old
