@@ -1,5 +1,6 @@
 /build/
 /build-*/
+CLAUDE.local.md
 debian/build/
 debian/changelog
 debian/.debhelper/

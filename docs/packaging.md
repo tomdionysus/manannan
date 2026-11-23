@@ -29,6 +29,18 @@ before `0.3.1`; uncommitted changes add `.dirty`. A build of a tag must match
 `project(Manannan VERSION ...)` in `CMakeLists.txt`, or the script refuses it.
 Only builds of a tag are released.
 
+## Releasing
+
+1. Set the new version in `project(Manannan VERSION ...)`, commit, and tag
+   `vX.Y.Z` (annotated).
+2. Build from a clean clone of the tag on Debian trixie arm64 with
+   `scripts/build-deb.sh`, and check it with
+   `lintian --fail-on error,warning build-deb/*.changes`.
+3. Add the packages to the apt repository, which signs them, and upload it.
+
+A version, once published, is never rebuilt: any change, however small, is a
+new version.
+
 ## What the packages do
 
 - The configuration is a conffile, so an upgrade keeps local changes and asks
