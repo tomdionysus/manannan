@@ -3,6 +3,20 @@
 Newest first. Each entry: what landed, the commit, and its gate counts (tests
 run and passed, sanitizers run). Each session leaves a handoff here.
 
+## The query engine, 2026-11-24 (develop 1011c28)
+
+- manannan/dns: Zone and Catalog (an immutable snapshot, checked as it is
+  built) and respond() (query octets in, response octets out): answers,
+  CNAME chains, referrals with glue, wildcards, NXDOMAIN and NODATA,
+  minimal ANY, EDNS with BADVERS, truncation by whole RRsets. Not yet:
+  DNS cookies, rate limiting, listeners, DNSSEC.
+- Gates on a claimed Pi (one core): release, clang and ASan+UBSan 159 of
+  159; check clean; coverage 99.6% of lines overall, every manannan/dns
+  file 100% but engine.cpp at 99.3% (one closing brace, gcov's unwind
+  path); fuzz 120 s per target, dns_engine 1.86 million queries and
+  dns_message 2.23 million round trips with no fault. CI on develop was
+  green for the wire format.
+
 ## The DNS wire format, 2026-11-24 (develop f738fc3)
 
 - manannan/dns: Name, the message parser and the writer, as
