@@ -3,6 +3,19 @@
 Newest first. Each entry: what landed, the commit, and its gate counts (tests
 run and passed, sanitizers run). Each session leaves a handoff here.
 
+## The DNS wire format, 2026-11-24 (develop f738fc3)
+
+- manannan/dns: Name, the message parser and the writer, as
+  manannan_dns, ahead of section 13's order on the owner's go. Bounded
+  in size, record count, name length and label type; compression
+  pointers only strictly backwards; RDATA names decompressed for the RFC
+  3597 types; OPT lifted into Edns. The writer compresses owner and
+  question names and refuses what does not fit, unchanged.
+- Gates on a claimed Pi: release 128 of 128 tests, clang 128 of 128,
+  ASan+UBSan 128 of 128, check clean; coverage 99.6% of lines overall,
+  100% of manannan/dns; fuzz 120 s per target, dns_message 2.76 million
+  round trips with no fault. TSan not run: nothing here is threaded.
+
 ## 0.4.0 on both nodes, and the sibling requests sent, 2026-11-23
 
 - On the owner's go, both production nodes upgraded from 0.3.0 to 0.4.0

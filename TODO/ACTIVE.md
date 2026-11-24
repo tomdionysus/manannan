@@ -9,9 +9,9 @@ production nodes run it, migrated and checked (TODO/COMPLETED.md). The
 0.5.0 is the design in TODO/2026-11-23-clustered-dns-spec.md (section 13
 the build order, section 15 the owner's answers). The section 14 requests
 went to the sibling projects on the owner's go; their answers are below.
-On the owner's go the DNS wire format starts first, on feature/dns-wire,
-because it needs nothing from Dannan or Dagda; step 1 (on the stack) waits
-for the Dannan and Dagda versions named below.
+The DNS wire format (manannan/dns) is on develop, ahead of the order
+because it needs nothing from the stack. Step 1 (on the stack) waits for
+Dagda 0.5.0; Dannan 0.12.0 is tagged.
 
 ## Principles
 
@@ -141,9 +141,7 @@ Nothing at present.
 
 ## The work, in order
 
-1. feature/dns-wire: the DNS message parser and writer (RFC 1035 and
-   successors), bounded, with a fuzz target and tests named by RFC clause.
-   It needs no sibling work and changes no 0.4 behaviour.
+1. Done: the DNS wire format (TODO/COMPLETED.md).
 2. 0.5.0, in the order of the spec's section 13: on the stack (after
    Dagda 0.5.0; Dannan 0.12.0 is tagged); the DNS server; DNSSEC; registrar plugins; the
    operator's optional features; the API and dashboard. Each is a feature
