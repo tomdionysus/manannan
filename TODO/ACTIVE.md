@@ -9,8 +9,8 @@ production nodes run it, migrated and checked (TODO/COMPLETED.md). The
 0.5.0 is the design in TODO/2026-11-23-clustered-dns-spec.md (section 13
 the build order, section 15 the owner's answers). The section 14 requests
 went to the sibling projects on the owner's go; their answers are below.
-The DNS wire format and the query engine (manannan/dns) are on develop,
-ahead of the order because they need nothing from the stack. Step 1 (on the stack) waits for
+The DNS wire format, the query engine and zone files (manannan/dns) are
+on develop, ahead of the order because they need nothing from the stack. Step 1 (on the stack) waits for
 Dagda 0.5.0; Dannan 0.12.0 is tagged.
 
 ## Principles
@@ -141,11 +141,9 @@ Nothing at present.
 
 ## The work, in order
 
-1. Done: the DNS wire format and the query engine (TODO/COMPLETED.md).
-   Next, on the owner's go of 2026-11-24, while step 1 waits: the
-   zone-file parser (RFC 1035 5), bounded, with its own fuzz target.
-   Then, once the stack is there: listeners, rate limiting, DNS cookies
-   (RFC 7873).
+1. Done: the DNS wire format, the query engine and zone files
+   (TODO/COMPLETED.md). Once the stack is there: listeners, rate
+   limiting, DNS cookies (RFC 7873).
 2. 0.5.0, in the order of the spec's section 13: on the stack (after
    Dagda 0.5.0; Dannan 0.12.0 is tagged); the DNS server; DNSSEC; registrar plugins; the
    operator's optional features; the API and dashboard. Each is a feature

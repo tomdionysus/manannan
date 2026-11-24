@@ -3,6 +3,17 @@
 Newest first. Each entry: what landed, the commit, and its gate counts (tests
 run and passed, sanitizers run). Each session leaves a handoff here.
 
+## Zone files, 2026-11-24
+
+- manannan/dns/zone_file: parse_zone_file (RFC 1035 5, $ORIGIN, $TTL,
+  $INCLUDE refused, ten types in presentation form and any in RFC 3597's
+  generic form, bounded, every fault naming its line) and to_zone_text,
+  whose output reads back to the same records.
+- Gates on a claimed Pi: release, clang and ASan+UBSan 171 of 171; check
+  clean; coverage 99.6% of lines overall, zone_file.cpp 99.7% (one closing
+  brace, gcov's unwind path); fuzz 120 s per target, dns_zone_file a
+  million inputs round-tripped with no fault, and the other four clean.
+
 ## The query engine, 2026-11-24 (develop 1011c28)
 
 - manannan/dns: Zone and Catalog (an immutable snapshot, checked as it is
