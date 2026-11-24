@@ -27,13 +27,16 @@ add_executable(manannan_tests
   daemon_migrate_test.cpp
   daemon_plugin_loader_test.cpp
   daemon_service_test.cpp
+  dns_message_test.cpp
+  dns_name_test.cpp
+  dns_writer_test.cpp
   loggers_logger_test.cpp
   plugins_check_ip_test.cpp
   plugins_route53_test.cpp
   plugins_secret_test.cpp
   plugins_sigv4_test.cpp)
 target_include_directories(manannan_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(manannan_tests PRIVATE manannan_core manannan_aws manannan_check_ip manannan_warnings GTest::gtest_main)
+target_link_libraries(manannan_tests PRIVATE manannan_core manannan_dns manannan_aws manannan_check_ip manannan_warnings GTest::gtest_main)
 target_compile_definitions(manannan_tests PRIVATE
   MANANNAN_TEST_WORK_DIR="${PROJECT_BINARY_DIR}/test-work"
   MANANNAN_TEST_PLUGIN_DIR="${manannan_test_plugins}"
