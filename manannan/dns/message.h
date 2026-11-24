@@ -133,6 +133,14 @@ struct Message {
 // record's eight (RFC 6891 6.1.3).
 std::uint16_t full_rcode(const Message& message);
 
+// Whether uncompressed RDATA is well formed: an A holds four octets, an
+// AAAA sixteen, and a type that holds names (RFC 3597 4) holds valid names
+// and fixed fields that fill it exactly. Other types are taken as they are.
+bool rdata_well_formed(std::uint16_t type, std::span<const std::uint8_t> rdata);
+// The first name in a well-formed RDATA of a type that holds names: the
+// target of NS, CNAME, PTR, MX and SRV, the primary server of SOA.
+std::optional<Name> rdata_name(std::uint16_t type, std::span<const std::uint8_t> rdata);
+
 enum class ParseError {
   none,
   short_header,      // fewer than twelve octets: nothing to answer

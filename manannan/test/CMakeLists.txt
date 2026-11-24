@@ -27,9 +27,11 @@ add_executable(manannan_tests
   daemon_migrate_test.cpp
   daemon_plugin_loader_test.cpp
   daemon_service_test.cpp
+  dns_engine_test.cpp
   dns_message_test.cpp
   dns_name_test.cpp
   dns_writer_test.cpp
+  dns_zone_test.cpp
   loggers_logger_test.cpp
   plugins_check_ip_test.cpp
   plugins_route53_test.cpp

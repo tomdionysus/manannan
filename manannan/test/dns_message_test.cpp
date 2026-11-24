@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "fixtures/dns_bytes.h"
+#include "fixtures/dns_zone.h"
 #include "manannan/dns/message.h"
 
 namespace {
@@ -340,4 +341,40 @@ TEST(DnsMessage, DescribesEveryError) {
     EXPECT_TRUE(seen.insert(text).second) << text;
   }
 }
+
+TEST(DnsMessage, RdataWellFormedRfc3597Section4) {
+  using manannan::dns::rdata_well_formed;
+  using manannan::test::mx_rdata;
+  using manannan::test::name_rdata;
+  using manannan::test::soa_rdata;
+  using manannan::test::srv_rdata;
+  EXPECT_TRUE(rdata_well_formed(rr_type::a, std::vector<std::uint8_t>{192, 0, 2, 1}));
+  EXPECT_FALSE(rdata_well_formed(rr_type::a, std::vector<std::uint8_t>{192, 0, 2}));
+  EXPECT_TRUE(rdata_well_formed(rr_type::aaaa, std::vector<std::uint8_t>(16, 0)));
+  EXPECT_FALSE(rdata_well_formed(rr_type::aaaa, std::vector<std::uint8_t>(4, 0)));
+  EXPECT_TRUE(rdata_well_formed(rr_type::ns, name_rdata("ns.example.com")));
+  EXPECT_TRUE(rdata_well_formed(rr_type::soa, soa_rdata("ns.example.com", "admin.example.com", 300)));
+  EXPECT_TRUE(rdata_well_formed(rr_type::mx, mx_rdata(10, "mail.example.com")));
+  EXPECT_TRUE(rdata_well_formed(rr_type::srv, srv_rdata(1, 2, 3, "sip.example.com")));
+  EXPECT_TRUE(rdata_well_formed(rr_type::txt, std::vector<std::uint8_t>{}));
+  EXPECT_FALSE(rdata_well_formed(rr_type::ns, std::vector<std::uint8_t>{}));
+  EXPECT_FALSE(rdata_well_formed(rr_type::ns, std::vector<std::uint8_t>{0xc0, 12}));      // compressed
+  EXPECT_FALSE(rdata_well_formed(rr_type::ns, std::vector<std::uint8_t>{1, 'a'}));        // no root
+  EXPECT_FALSE(rdata_well_formed(rr_type::ns, std::vector<std::uint8_t>{1, 'a', 0, 0}));  // trailing
+  EXPECT_FALSE(rdata_well_formed(rr_type::mx, std::vector<std::uint8_t>{0}));             // short preference
+  std::vector<std::uint8_t> endless;
+  for (int i = 0; i < 200; ++i) endless.insert(endless.end(), {1, 'a'});
+  EXPECT_FALSE(rdata_well_formed(rr_type::ns, endless));  // no root within 255 octets
+}
+
+TEST(DnsMessage, RdataName) {
+  using manannan::dns::rdata_name;
+  using manannan::test::name_rdata;
+  EXPECT_EQ(*rdata_name(rr_type::ns, name_rdata("ns.example.com")), name("ns.example.com"));
+  EXPECT_EQ(*rdata_name(rr_type::mx, manannan::test::mx_rdata(10, "mail.example.com")), name("mail.example.com"));
+  EXPECT_EQ(*rdata_name(rr_type::srv, manannan::test::srv_rdata(1, 2, 3, "sip.example.com")), name("sip.example.com"));
+  EXPECT_EQ(*rdata_name(rr_type::soa, manannan::test::soa_rdata("ns.example.com", "admin.example.com", 1)), name("ns.example.com"));
+  EXPECT_FALSE(rdata_name(rr_type::a, std::vector<std::uint8_t>{1, 2, 3, 4}));
+}
+
 }  // namespace

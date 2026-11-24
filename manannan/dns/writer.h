@@ -40,6 +40,18 @@ class Writer {
   bool add_record(Section section, const Record& record);
   // The OPT record, in the additional section (RFC 6891 6.1).
   bool add_edns(const Edns& edns);
+  // Keeps `octets` free of questions and records, for the OPT record that
+  // add_edns writes last; add_edns itself may use them.
+  void reserve(std::size_t octets) { _reserved = octets; }
+
+  // A point to return to, so that several records go in together or not at all.
+  struct Mark {
+    std::size_t size;
+    std::size_t names;
+    std::array<std::uint16_t, 4> counts;
+  };
+  Mark mark() const { return Mark{_out.size(), _names_added.size(), _counts}; }
+  void rollback(const Mark& mark);
 
   std::size_t size() const { return _out.size(); }
   std::vector<std::uint8_t> finish();
@@ -49,9 +61,10 @@ class Writer {
   void put16(std::uint16_t value);
   void put32(std::uint32_t value);
   void put_name(const Name& name);
-  bool commit_or_rollback(std::size_t mark, std::size_t names_mark);
+  bool commit_or_rollback(std::size_t mark, std::size_t names_mark, std::size_t reserved);
 
   std::size_t _max_size;
+  std::size_t _reserved = 0;
   Header _header;
   std::vector<std::uint8_t> _out;
   Section _section = Section::question;

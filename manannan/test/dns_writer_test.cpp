@@ -195,4 +195,32 @@ TEST(DnsWriter, WholeMessagesThatDoNotFit) {
   message.questions.clear();
   EXPECT_FALSE(write_message(message, 12));  // an answer
 }
+
+TEST(DnsWriter, ReservesRoomForOpt) {
+  Writer writer(64);
+  writer.reserve(11);
+  ASSERT_TRUE(writer.add_question(Question{name("www.example.com"), rr_type::a, 1}));            // 33 octets
+  EXPECT_FALSE(writer.add_record(Section::answer, Record{name("new.name"), 65280, 1, 0, {1}}));  // 54, and 11 kept
+  EXPECT_EQ(writer.size(), 33u);
+  EXPECT_TRUE(writer.add_edns(Edns{}));  // the OPT record may use what is kept
+  EXPECT_EQ(writer.size(), 44u);
+}
+
+TEST(DnsWriter, MarkAndRollback) {
+  Writer writer;
+  ASSERT_TRUE(writer.add_record(Section::answer, a_record("a.example", 1)));
+  const Writer::Mark mark = writer.mark();
+  ASSERT_TRUE(writer.add_record(Section::answer, a_record("b.example", 2)));
+  ASSERT_TRUE(writer.add_record(Section::authority, a_record("c.example", 3)));
+  writer.rollback(mark);
+  EXPECT_EQ(writer.size(), mark.size);
+  // The names written after the mark are forgotten, so c.example is written in full again.
+  ASSERT_TRUE(writer.add_record(Section::additional, a_record("c.example", 4)));
+  const Message message = read_back(writer.finish());
+  EXPECT_EQ(message.answers.size(), 1u);
+  EXPECT_TRUE(message.authorities.empty());
+  ASSERT_EQ(message.additionals.size(), 1u);
+  EXPECT_EQ(message.additionals[0].name, name("c.example"));
+}
+
 }  // namespace

@@ -127,6 +127,20 @@ bool Name::is_subdomain_of(const Name& parent) const {
   }
 }
 
+std::optional<Name> Name::parent() const {
+  if (is_root()) return std::nullopt;
+  return Name(std::vector<std::uint8_t>(_wire.begin() + 1 + _wire[0], _wire.end()));
+}
+
+std::optional<Name> Name::prefixed(std::string_view label) const {
+  if (label.empty() || label.size() > max_label_octets || _wire.size() + 1 + label.size() > max_name_octets) return std::nullopt;
+  std::vector<std::uint8_t> wire(1 + label.size() + _wire.size());
+  wire[0] = static_cast<std::uint8_t>(label.size());
+  std::copy(label.begin(), label.end(), wire.begin() + 1);
+  std::copy(_wire.begin(), _wire.end(), wire.begin() + 1 + static_cast<std::ptrdiff_t>(label.size()));
+  return Name(std::move(wire));
+}
+
 bool operator==(const Name& a, const Name& b) { return equal_from(a._wire, 0, b._wire); }
 
 }  // namespace manannan::dns

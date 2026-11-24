@@ -44,6 +44,10 @@ class Name {
   Name lowered() const;
   // True when this name is `parent` or below it.
   bool is_subdomain_of(const Name& parent) const;
+  // The name without its first label; the root has no parent.
+  std::optional<Name> parent() const;
+  // The name with `label` in front, unless that passes a length limit or the label is empty.
+  std::optional<Name> prefixed(std::string_view label) const;
 
   friend bool operator==(const Name& a, const Name& b);
 

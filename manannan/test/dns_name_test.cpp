@@ -108,4 +108,19 @@ TEST(DnsName, SubdomainRfc1034Section3_1) {
   EXPECT_FALSE(name("badexample.com").is_subdomain_of(name("example.com")));
   EXPECT_FALSE(Name().is_subdomain_of(name("com")));
 }
+
+TEST(DnsName, ParentAndPrefixed) {
+  EXPECT_EQ(*name("www.example.com").parent(), name("example.com"));
+  EXPECT_EQ(*name("com").parent(), Name());
+  EXPECT_FALSE(Name().parent());
+  EXPECT_EQ(*name("example.com").prefixed("*"), name("*.example.com"));
+  EXPECT_EQ(*Name().prefixed("a"), name("a"));
+  EXPECT_FALSE(name("example.com").prefixed(""));
+  EXPECT_FALSE(name("example.com").prefixed(std::string(64, 'a')));
+  const std::string label63(63, 'a');
+  const Name full = name((label63 + "." + label63 + "." + label63 + "." + std::string(61, 'a')).c_str());
+  EXPECT_FALSE(full.prefixed("b"));
+  EXPECT_TRUE(full.parent()->prefixed(std::string(61, 'b')));
+}
+
 }  // namespace

@@ -30,11 +30,13 @@ target_compile_definitions(manannan_core PRIVATE MANANNAN_DEFAULT_CONFIG="${CMAK
                                                  MANANNAN_DEFAULT_SECRETS="${CMAKE_INSTALL_FULL_SYSCONFDIR}/manannan/secrets.yaml")
 target_link_libraries(manannan_core PUBLIC manannan_api ${CMAKE_DL_LIBS} PRIVATE manannan_warnings)
 
-# The DNS wire format: names, the message parser and the writer.
+# The DNS server's core: the wire format, zones and the query engine.
 add_library(manannan_dns STATIC
+  dns/engine.cpp
   dns/message.cpp
   dns/name.cpp
-  dns/writer.cpp)
+  dns/writer.cpp
+  dns/zone.cpp)
 target_include_directories(manannan_dns PUBLIC ${PROJECT_SOURCE_DIR})
 target_link_libraries(manannan_dns PRIVATE manannan_warnings)
 

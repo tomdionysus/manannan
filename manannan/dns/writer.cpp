@@ -60,15 +60,20 @@ void Writer::put_name(const Name& name) {
   _out.push_back(0);
 }
 
-bool Writer::commit_or_rollback(std::size_t mark, std::size_t names_mark) {
-  if (_out.size() <= _max_size) {
+bool Writer::commit_or_rollback(std::size_t mark, std::size_t names_mark, std::size_t reserved) {
+  if (_out.size() + reserved <= _max_size) {
     ++_counts[static_cast<std::size_t>(_section)];
     return true;
   }
-  _out.resize(mark);
-  for (std::size_t i = names_mark; i < _names_added.size(); ++i) _names.erase(_names_added[i]);
-  _names_added.resize(names_mark);
+  rollback(Mark{mark, names_mark, _counts});
   return false;
+}
+
+void Writer::rollback(const Mark& mark) {
+  _out.resize(mark.size);
+  for (std::size_t i = mark.names; i < _names_added.size(); ++i) _names.erase(_names_added[i]);
+  _names_added.resize(mark.names);
+  _counts = mark.counts;
 }
 
 bool Writer::add_question(const Question& question) {
@@ -78,7 +83,7 @@ bool Writer::add_question(const Question& question) {
   put_name(question.name);
   put16(question.type);
   put16(question.klass);
-  return commit_or_rollback(mark, names_mark);
+  return commit_or_rollback(mark, names_mark, _reserved);
 }
 
 bool Writer::add_record(Section section, const Record& record) {
@@ -93,7 +98,7 @@ bool Writer::add_record(Section section, const Record& record) {
   put32(record.ttl);
   put16(static_cast<std::uint16_t>(record.rdata.size()));
   _out.insert(_out.end(), record.rdata.begin(), record.rdata.end());
-  return commit_or_rollback(mark, names_mark);
+  return commit_or_rollback(mark, names_mark, _reserved);
 }
 
 bool Writer::add_edns(const Edns& edns) {
@@ -114,7 +119,7 @@ bool Writer::add_edns(const Edns& edns) {
     put16(static_cast<std::uint16_t>(option.data.size()));
     _out.insert(_out.end(), option.data.begin(), option.data.end());
   }
-  _has_edns = commit_or_rollback(mark, _names_added.size());
+  _has_edns = commit_or_rollback(mark, _names_added.size(), 0);
   return _has_edns;
 }
 

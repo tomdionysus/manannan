@@ -172,7 +172,44 @@ ParseError read_record(std::span<const std::uint8_t> data, std::size_t& pos, Sec
   return ParseError::none;
 }
 
+// The length of the uncompressed name at the start of `data`, or zero.
+std::size_t name_length(std::span<const std::uint8_t> data) {
+  std::size_t pos = 0;
+  while (pos < data.size() && pos < max_name_octets) {
+    const std::uint8_t length = data[pos];
+    if (length > max_label_octets) return 0;
+    pos += 1 + length;
+    if (length == 0) return pos;
+  }
+  return 0;
+}
+
 }  // namespace
+
+bool rdata_well_formed(std::uint16_t type, std::span<const std::uint8_t> rdata) {
+  if (type == rr_type::a) return rdata.size() == 4;
+  if (type == rr_type::aaaa) return rdata.size() == 16;
+  std::size_t pos = 0;
+  for (const Field field : layout(type)) {
+    const std::span<const std::uint8_t> rest = rdata.subspan(pos);
+    const std::size_t length = field == Field::name ? name_length(rest) : fixed_octets(field);
+    if (length == 0 || length > rest.size()) return false;
+    pos += length;
+  }
+  return pos == rdata.size() || layout(type).empty();
+}
+
+std::optional<Name> rdata_name(std::uint16_t type, std::span<const std::uint8_t> rdata) {
+  std::size_t pos = 0;
+  for (const Field field : layout(type)) {
+    if (field == Field::name) {
+      const std::span<const std::uint8_t> rest = rdata.subspan(pos);
+      return Name::from_wire(rest.first(name_length(rest)));
+    }
+    pos += fixed_octets(field);
+  }
+  return std::nullopt;
+}
 
 std::uint16_t full_rcode(const Message& message) {
   const std::uint16_t high = message.edns ? static_cast<std::uint16_t>(message.edns->extended_rcode << 4) : 0;
