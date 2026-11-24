@@ -31,6 +31,7 @@ add_executable(manannan_tests
   dns_message_test.cpp
   dns_name_test.cpp
   dns_writer_test.cpp
+  dns_zone_file_test.cpp
   dns_zone_test.cpp
   loggers_logger_test.cpp
   plugins_check_ip_test.cpp

@@ -47,6 +47,7 @@ inline constexpr std::uint16_t aaaa = 28;
 inline constexpr std::uint16_t srv = 33;
 inline constexpr std::uint16_t opt = 41;
 inline constexpr std::uint16_t any = 255;
+inline constexpr std::uint16_t caa = 257;
 }  // namespace rr_type
 
 namespace rr_class {

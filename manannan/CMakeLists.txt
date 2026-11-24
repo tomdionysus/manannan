@@ -36,7 +36,8 @@ add_library(manannan_dns STATIC
   dns/message.cpp
   dns/name.cpp
   dns/writer.cpp
-  dns/zone.cpp)
+  dns/zone.cpp
+  dns/zone_file.cpp)
 target_include_directories(manannan_dns PUBLIC ${PROJECT_SOURCE_DIR})
 target_link_libraries(manannan_dns PRIVATE manannan_warnings)
 
