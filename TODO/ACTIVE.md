@@ -2,26 +2,16 @@
 
 ## Resume here
 
-0.4.0 is released as far as this session can take it: main, develop and the
-0.4.0 tag are pushed, CI and CodeQL are green on main, and the packages are
-staged in the apt tree's incoming/manannan/0.4.0/. The apt upload and the
-nodes' upgrades are the owner's (below); 0.3.0 is what the apt repository
-and both nodes still run.
+0.4.0 is released and running: the apt repository serves it and both
+production nodes run it, migrated and checked (TODO/COMPLETED.md). The
+0.4.x line takes fixes only until 0.5.0.
 
-The next version is settled as a design, not started:
-TODO/2026-11-23-clustered-dns-spec.md, settled question by question with
-the owner. Manannan 0.5.0 becomes a clustered authoritative DNS server on
-Dannan and Dagda, with DNSSEC, registrar plugins, a REST API and a
-dashboard, and keeps every 0.4 function (its requirements R1 to R7). The
-spec's section 15 holds the owner's 32 answers; nothing in it is open. Its
-section 13 is the build order and section 14 the requests to the sibling
-projects, which wait on the owner's go to send them.
-
-No build-cluster cores are held and nothing is running. develop is ahead of
-origin by unpushed commits (git log origin/develop..develop); pushing is
-the owner's word. Builds run through build/pi-test.sh and build/pi-ci.sh
-(untracked helpers that rsync the tree to /root/manannan-work on a claimed
-Pi): under the no-preferred-node rule, claim whichever Pi is free.
+0.5.0 is the design in TODO/2026-11-23-clustered-dns-spec.md (section 13
+the build order, section 15 the owner's answers). The section 14 requests
+went to the sibling projects on the owner's go; their answers are below.
+On the owner's go the DNS wire format starts first, on feature/dns-wire,
+because it needs nothing from Dannan or Dagda; step 1 (on the stack) waits
+for the Dannan and Dagda versions named below.
 
 ## Principles
 
@@ -112,25 +102,50 @@ Pi): under the no-preferred-node rule, claim whichever Pi is free.
     signed-in accounts unless he asks for browser use in that message (his
     global rule). Authenticated CLIs stay within the named repository and
     task.
+19. 2026-11-24: the registrar credential stays as the spec has it, opened
+    only by the holder of the domain's writer lease. 0.5.0's registrar
+    plugins and the release wait for Dagda's key wrapping (after Dagda
+    0.5.0), with no interim per-node registrar credential.
 
 ## Waiting on the owner
 
-1. The apt upload of incoming/manannan/0.4.0, then each node's upgrade, on
-   his go. After each: check the migration (config.yaml, secrets.yaml 0600
-   owned by manannan, the user, the old files gone) and a clean first cycle
-   at debug (MANANNAN_LOG_LEVEL from 0.4.0).
-2. The go to send the spec's section 14 requests to the sibling projects,
-   through the coordinating session: to the network project (with the
-   threshold scheme, FROST, asked of it), the storage project and the
-   directory project.
-3. The go to push develop's unpushed commits.
+Nothing at present.
+
+## What the siblings answered (2026-11-23)
+
+- Dannan: reachability (NodeRecord path_class, Nodes::watch), agreement
+  (Context::agreement) and adverts and health (NodeRecord::adverts,
+  watch_advert, status::health_of from 0.12.0) exist. 0.12.0 is tagged
+  (2026-11-24) with the password credential; 0.13.0 (about 12-05) the HTTP
+  server core, the DNS client, named-slot placement (a pure function,
+  recomputed on Nodes::watch), a true-time interval for signing, a watch
+  on revocations, and the external address per family. JSON exists. Each
+  new shape comes to Manannan before code. FROST is built in Manannan:
+  it moves to Dannan only if a second project needs it.
+- Dagda: register maps (D6, context.registers()) are on its develop; leases
+  in head spaces with the epoch fence (D5) come with Dagda 0.5.0, in days.
+  The registrar's write is a register commit carrying the lease epoch. A
+  merge Manannan supplies exists today (heads().open with its own codec and
+  merge); watch exists (heads().watch, registers().changed). A node-sealed
+  space covers per-node credentials now. Not covered before Dagda 0.5.0: a
+  registrar credential only the lease holder can open (key wrapping to the
+  holder on takeover); it goes into Dagda's plan after 0.5.0 with Manannan
+  waiting, and its shape comes to Manannan first. Until then the spec's
+  section 7.3 registrar credential has no home; registrar plugins (step 4)
+  and the release wait on it (Decision 19).
+- Lugh: everything is at 0.6.0, and Manannan is in its dependants. App
+  roles are in the ID token and userinfo, not in access tokens: map roles
+  at sign-in, and for an API call with only an access token read the
+  user's groups. lugh_client 0.6.0 builds on Dannan 0.11.x. No group-change
+  push yet: a role change lands at the next sign-in or groups read.
 
 ## The work, in order
 
-1. After the owner's 0.4.0 steps: CI on main is already green; check each
-   upgraded node as in "Waiting" item 1.
-2. 0.5.0, in the order of the spec's section 13, once the sibling requests
-   are sent: on the stack; the DNS server; DNSSEC; registrar plugins; the
+1. feature/dns-wire: the DNS message parser and writer (RFC 1035 and
+   successors), bounded, with a fuzz target and tests named by RFC clause.
+   It needs no sibling work and changes no 0.4 behaviour.
+2. 0.5.0, in the order of the spec's section 13: on the stack (after
+   Dagda 0.5.0; Dannan 0.12.0 is tagged); the DNS server; DNSSEC; registrar plugins; the
    operator's optional features; the API and dashboard. Each is a feature
    branch squashed onto develop, keeping R1 to R7 working. The release
    cannot ship before Dannan's HTTP server and credential helper and

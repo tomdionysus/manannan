@@ -3,6 +3,20 @@
 Newest first. Each entry: what landed, the commit, and its gate counts (tests
 run and passed, sanitizers run). Each session leaves a handoff here.
 
+## 0.4.0 on both nodes, and the sibling requests sent, 2026-11-23
+
+- On the owner's go, both production nodes upgraded from 0.3.0 to 0.4.0
+  through apt, one at a time, each with /etc/manannan backed up first under
+  /root/manannan-pre040-<stamp>. On each: the manannan user created,
+  config.yaml and secrets.yaml (0600, owned by manannan) written by the
+  migration, the old files gone, the service running as manannan from
+  /usr/bin. One cycle at debug level on each: every record read back as
+  current, no error, and no credential in the journal. No rollback needed.
+- On the owner's go, the spec's section 14 requests sent through the
+  coordinating session. Replies from the network, storage and directory
+  projects are summarised in TODO/ACTIVE.md, "What the siblings answered".
+- develop was already in step with origin; nothing to push.
+
 ## Second history rewrite, 2026-11-23
 
 - A record entry written this day (first committed as 861a244) named a
